@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<DBConfig>
+  <maxActive>20</maxActive>
+  <maxIdle>5</maxIdle>
+  <maxWait>30000</maxWait>
+  <url>jdbc:mysql://127.0.0.1/CreditCardMate</url>
+  <userName>CreditCardMate</userName>
+  <password>CreditCardMate</password>
+</DBConfig>

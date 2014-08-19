@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RedisConfig>
+	<host>127.0.0.1</host>
+	<maxIdle>10</maxIdle>
+	<maxTotal>1024</maxTotal>
+	<maxWaitMillis>1000</maxWaitMillis>
+	<port>6381</port>
+	<softMinEvictableIdleTimeMillis>10000</softMinEvictableIdleTimeMillis>
+	<testOnBorrow>false</testOnBorrow>
+</RedisConfig>
