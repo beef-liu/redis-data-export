@@ -1,0 +1,28 @@
+2014-08-20 16:36:30,946  INFO (com.beef.redisexport.RedisDataExportContext:61) - configDir:/Users/beef_in_jp/Documents/GitHubProjects/beef-liu/redis-data-export/src/redis-data-export/executable/conf
+2014-08-20 16:36:30,953 DEBUG (com.salama.reflect.PreScanClassFinder:89) - loadClasses() url:jar:file:/Users/beef_in_jp/Documents/GitHubProjects/beef-liu/redis-data-export/src/redis-data-export/executable/lib/redis-data-export.jar!/com/beef/redisexport/handler
+2014-08-20 16:36:30,956 DEBUG (com.salama.reflect.PreScanClassFinder:203) - Loaded com.beef.redisexport.handler.DefaultRedisDataExportHandler
+2014-08-20 16:36:30,999  INFO (com.beef.redisexport.RedisDataExportContext:84) - dbPool:jdbc:mysql://127.0.0.1/test user:test maxActive:20 maxIdle:5 maxWait:30000 autoCommit:false
+2014-08-20 16:36:31,390  INFO (com.beef.redisexport.RedisDataExportContext:115) - jedisPool:127.0.0.1:6379 maxTotal:1024 maxIdle:10 maxWaitMillis:1000 softMinEvictableIdleTimeMillis:10000 testOnBorrow:false
+2014-08-20 16:36:31,417  INFO (com.beef.redisexport.RedisDataIterator:56) - RedisDataIterator() start ---------
+2014-08-20 16:36:32,464  INFO (com.beef.redisexport.RedisDataIterator:166) - scanKey() keyPattern:null cursor:0 taskNum:0
+2014-08-20 16:36:32,470 DEBUG (com.beef.redisexport.RedisDataIterator:106) - task.run() taskNum:0 keyList.size:20
+2014-08-20 16:36:32,471 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey9 keyType:list
+2014-08-20 16:36:32,471 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey5 keyType:list
+2014-08-20 16:36:32,472 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testlist keyType:list
+2014-08-20 16:36:32,472 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey8 keyType:list
+2014-08-20 16:36:32,472 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey11 keyType:list
+2014-08-20 16:36:32,473 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey3 keyType:list
+2014-08-20 16:36:32,473 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey2 keyType:list
+2014-08-20 16:36:32,473 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey15 keyType:list
+2014-08-20 16:36:32,475 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey6 keyType:list
+2014-08-20 16:36:32,476 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey18 keyType:list
+2014-08-20 16:36:32,476 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey10 keyType:list
+2014-08-20 16:36:32,476 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey17 keyType:list
+2014-08-20 16:36:32,477 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey16 keyType:list
+2014-08-20 16:36:32,477 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey4 keyType:list
+2014-08-20 16:36:32,477 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey0 keyType:list
+2014-08-20 16:36:32,477 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey1 keyType:list
+2014-08-20 16:36:32,478 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey13 keyType:list
+2014-08-20 16:36:32,478 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey7 keyType:list
+2014-08-20 16:36:32,478 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey14 keyType:list
+2014-08-20 16:36:32,479 DEBUG (com.beef.redisexport.handler.DefaultRedisDataExportHandler:12) - handleRedisKey() key:testkey12 keyType:list

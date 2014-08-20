@@ -14,6 +14,7 @@ import MetoXML.Base.XmlParseException;
 import com.beef.redisexport.config.DBConfig;
 import com.beef.redisexport.config.RedisConfig;
 import com.beef.redisexport.util.DBPool;
+import com.salama.reflect.PreScanClassFinder;
 
 public class RedisDataExportContext {
 	private final static Logger logger = Logger.getLogger(RedisDataExportContext.class);
@@ -27,7 +28,8 @@ public class RedisDataExportContext {
 	private File _workDir;
 	private DBPool _dbPool;
 	private JedisPool _jedisPool;
-	
+
+	private PreScanClassFinder _preScanClassFinder = null;
 	
 	public DBPool getDbPool() {
 		return _dbPool;
@@ -58,6 +60,19 @@ public class RedisDataExportContext {
 		File configDir =  new File(_workDir, DIR_NAME_CONF);
 		logger.info("configDir:" + configDir.getAbsolutePath());
 		System.out.println("configDir:" + configDir.getAbsolutePath());
+		
+		//init classFinder
+		/*
+		{
+			if(_preScanClassFinder == null) {
+				_preScanClassFinder = new PreScanClassFinder();
+			} else {
+				_preScanClassFinder.clearPreScannedClass();
+			}
+			
+			_preScanClassFinder.loadClassOfPackage("com.beef.redisexport.handler");
+		}
+		*/
 		
 		//init DBPool
 		{
