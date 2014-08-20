@@ -43,10 +43,18 @@ public class RedisDataIterator {
 		_redisDataHandler = redisDataHandler;
 		
 		_scanParams = new ScanParams();
-		_scanParams.match(keyPattern);
+		if(keyPattern != null && keyPattern.length() > 0) {
+			_scanParams.match(keyPattern);
+		}
 		_scanParams.count(scanCount);
 		
-		//create threads
+		//start threads
+		start(threadCount);
+	}
+	
+	private void start(int threadCount) {
+		logger.info("RedisDataIterator() start ---------");
+
 		_taskPool = Executors.newScheduledThreadPool(threadCount);
 		
 		long initialDelay = 1000;
@@ -58,7 +66,19 @@ public class RedisDataIterator {
 			_aliveThreadNumMap.put(Integer.valueOf(i), Integer.valueOf(i));
 		}
 	}
-
+	
+	/**
+	 * It will wait until all threads stop.
+	 */
+	public void waitForever() {
+		try {
+			_taskPool.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+			logger.error(null, e);
+		}
+	}
+	
 	private void shutDown() {
 		_taskPool.shutdown();
 	}
@@ -83,8 +103,7 @@ public class RedisDataIterator {
 			List<String> keyList = scanKey(_taskNum);
 
 			if(keyList != null && _redisDataHandler != null) {
-				logger.info("DataIterateTask() taskNum:" + _taskNum + " keyList.size:" + keyList.size());
-				
+				logger.debug("task.run() taskNum:" + _taskNum + " keyList.size:" + keyList.size());
 				for(int i = 0; i < keyList.size(); i++) {
 					handleOneKey(keyList.get(i));
 				}
@@ -131,14 +150,18 @@ public class RedisDataIterator {
 			Jedis jedis = null;
 
 			try {
-				jedis = RedisDataExportContext.singleton().getJedisPool().getResource();
-
 				String cursor;
 				if(_scanCursor == null) {
 					cursor = "0";
 				} else {
-					cursor = _scanCursor;
+					if(_scanCursor.equals("0")) {
+						return null;
+					} else {
+						cursor = _scanCursor;
+					}
 				}
+				
+				jedis = RedisDataExportContext.singleton().getJedisPool().getResource();
 				
 				logger.info("scanKey() keyPattern:" + _keyPattern + " cursor:" + cursor + " taskNum:" + taskNum);
 				ScanResult<String> result = jedis.scan(cursor, _scanParams);
@@ -148,6 +171,9 @@ public class RedisDataIterator {
 			} catch(JedisConnectionException e) {
 				RedisDataExportContext.singleton().getJedisPool().returnBrokenResource(jedis);
 				logger.error(null, e);
+				
+				//shutdown all threads
+				shutDown();
 				return null;
 			} catch(Throwable e) {
 				logger.error(null, e);

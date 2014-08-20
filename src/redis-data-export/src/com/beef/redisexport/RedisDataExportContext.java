@@ -24,15 +24,6 @@ public class RedisDataExportContext {
 	
 	private static RedisDataExportContext _singleton = null;
 	
-	static {
-		try {
-			_singleton = new RedisDataExportContext();
-			_singleton.reload(_singleton.getWorkDir());
-		} catch(Throwable e) {
-			logger.error(null, e);
-		}
-	}
-	
 	private File _workDir;
 	private DBPool _dbPool;
 	private JedisPool _jedisPool;
@@ -54,13 +45,19 @@ public class RedisDataExportContext {
 	}
 	
 	public static RedisDataExportContext singleton() {
+		if(_singleton == null) {
+			_singleton = new RedisDataExportContext();
+		}
 		
 		return _singleton;
 	}
 
-	protected void reload(File workDir) throws XmlParseException, IOException, InvocationTargetException, IllegalAccessException, InstantiationException, NoSuchMethodException {
-		File configDir =  new File(workDir, DIR_NAME_CONF);
+	protected void reload() throws XmlParseException, IOException, InvocationTargetException, IllegalAccessException, InstantiationException, NoSuchMethodException {
+		System.out.println("RedisDataExportContext reload() -----------------");
+		
+		File configDir =  new File(_workDir, DIR_NAME_CONF);
 		logger.info("configDir:" + configDir.getAbsolutePath());
+		System.out.println("configDir:" + configDir.getAbsolutePath());
 		
 		//init DBPool
 		{
@@ -113,7 +110,12 @@ public class RedisDataExportContext {
 	}
 	
 	public void destroy() {
-		_jedisPool.destroy();
+		if(_jedisPool != null) {
+			System.out.println("RedisDataExportContext destroy() -----------------");
+			
+			_jedisPool.destroy();
+			_jedisPool = null;
+		}
 	}
 	
 	public final File getWorkDir() {
