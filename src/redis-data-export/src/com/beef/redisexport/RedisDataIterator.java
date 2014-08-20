@@ -102,7 +102,7 @@ public class RedisDataIterator {
 
 			List<String> keyList = scanKey(_taskNum);
 
-			if(keyList != null && _redisDataHandler != null) {
+			if(keyList != null && keyList.size() > 0 && _redisDataHandler != null) {
 				logger.debug("task.run() taskNum:" + _taskNum + " keyList.size:" + keyList.size());
 				for(int i = 0; i < keyList.size(); i++) {
 					handleOneKey(keyList.get(i));
