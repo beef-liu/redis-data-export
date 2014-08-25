@@ -29,7 +29,7 @@ public class RedisDataExportContext {
 	private DBPool _dbPool;
 	private JedisPool _jedisPool;
 
-	private PreScanClassFinder _preScanClassFinder = null;
+	//private PreScanClassFinder _preScanClassFinder = null;
 	
 	public DBPool getDbPool() {
 		return _dbPool;
@@ -39,13 +39,14 @@ public class RedisDataExportContext {
 		return _jedisPool;
 	}
 
-	private RedisDataExportContext() {
+	public RedisDataExportContext() {
 		File workDir =  new File("");
 		System.out.println("Run at " + workDir.getAbsolutePath());
 		
 		_workDir = new File(workDir.getAbsolutePath()); 
 	}
 	
+	/*
 	public static RedisDataExportContext singleton() {
 		if(_singleton == null) {
 			_singleton = new RedisDataExportContext();
@@ -53,8 +54,9 @@ public class RedisDataExportContext {
 		
 		return _singleton;
 	}
+	*/
 
-	protected void reload() throws XmlParseException, IOException, InvocationTargetException, IllegalAccessException, InstantiationException, NoSuchMethodException {
+	public void reload() throws XmlParseException, IOException, InvocationTargetException, IllegalAccessException, InstantiationException, NoSuchMethodException {
 		System.out.println("RedisDataExportContext reload() -----------------");
 		
 		File configDir =  new File(_workDir, DIR_NAME_CONF);
