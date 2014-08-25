@@ -3,12 +3,159 @@ package com.beef.redisexport.schema.util;
 import java.util.ArrayList;
 import java.util.StringTokenizer;
 
+import org.apache.log4j.Logger;
+
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.ScanParams;
+import redis.clients.jedis.ScanResult;
+import redis.clients.jedis.exceptions.JedisConnectionException;
+
 import com.beef.redisexport.schema.data.FieldDesc;
 import com.beef.redisexport.schema.data.KeyDesc;
 import com.beef.redisexport.schema.data.KeyFieldDesc;
+import com.beef.redisexport.schema.data.KeySchema;
 import com.beef.redisexport.schema.data.ValueDesc;
+import com.beef.redisexport.util.DBPool;
 
 public class KeySchemaUtil {
+	private final static Logger logger = Logger.getLogger(KeySchemaUtil.class);
+
+	public static KeySchema generateDefaultSchema(
+			JedisPool jedisPool, DBPool dbPool,
+			String[] keyPatternArray, int scanCount) {
+		KeySchema keySchema = new KeySchema();
+		
+		Object keyDesc;
+		for(int i = 0; i < keyPatternArray.length; i++) {
+			try {
+				keyDesc = generateDefaultKeyDescOrKeyFieldDesc(
+						jedisPool, dbPool, 
+						keyPatternArray[i], scanCount);
+				if(keyDesc == null) {
+					continue;
+				}
+				
+				if(KeyFieldDesc.class.isAssignableFrom(keyDesc.getClass())) {
+					keySchema.getKeyFieldDescs().add((KeyFieldDesc)keyDesc);
+				} else {
+					keySchema.getKeyDescs().add((KeyDesc)keyDesc);
+				}
+			} catch(Throwable e) {
+				e.printStackTrace();
+				logger.error(null, e);
+			}
+		}
+		
+		return keySchema;
+	}
+	
+	/**
+	 * 
+	 * @param keyPattern
+	 * @return KeyDesc or KeyFieldDesc
+	 */
+	public static Object generateDefaultKeyDescOrKeyFieldDesc(
+			JedisPool jedisPool, DBPool dbPool,
+			String keyPattern, int scanCount) {
+		String key = scanKeyPatternFor1Key(jedisPool, keyPattern, scanCount);
+		if(key == null) {
+			logger.warn("Key does not exists:" + keyPattern);
+			return null;
+		}
+		
+		String keyType = getKeyTypeInRedis(jedisPool, key);
+		if(keyType == null) {
+			return null;
+		}
+		
+		if(keyType.equals("string")) {
+			
+		} else if(keyType.equals("list")) {
+			
+		} else if(keyType.equals("hash")) {
+			
+		} else if(keyType.equals("set")) {
+			throw new RuntimeException("Not support keyType:" + keyType + " of redis yet");
+		} else if(keyType.equals("zset")) {
+			throw new RuntimeException("Not support keyType:" + keyType + " of redis yet");
+		} else {
+			throw new RuntimeException("Not support keyType:" + keyType + " of redis yet");
+		}
+	}
+	
+	/**
+	 * 
+	 * @param jedisPool
+	 * @param keyPattern
+	 * @param scanCount
+	 * @return key
+	 */
+	public static String scanKeyPatternFor1Key(JedisPool jedisPool, 
+			String keyPattern, int scanCount) {
+		Jedis jedis = null;
+		try {
+			ScanParams scanParams = new ScanParams();
+			scanParams = new ScanParams();
+			if(keyPattern != null && keyPattern.length() > 0) {
+				KeyPattern pattern = KeySchemaUtil.parseKeyPattern(keyPattern);
+				scanParams.match(pattern.getKeyMatchPattern());
+			}
+			scanParams.count(scanCount);
+			ScanResult<String> result = null;
+			String scanCursor = "0";
+			
+			jedis = jedisPool.getResource();
+			while(true) {
+				result = jedis.scan(scanCursor, scanParams);
+				if(result == null) {
+					break;
+				}
+				
+				if(result.getResult().size() > 0) {
+					break;
+				}
+				
+				scanCursor = result.getStringCursor();
+				if(scanCursor.equals("0")) {
+					break;
+				}
+			}
+			
+			if(result != null && result.getResult().size() > 0) {
+				return result.getResult().get(0);
+			} else {
+				return null;
+			}
+		} catch(JedisConnectionException e) {
+			jedisPool.returnBrokenResource(jedis);
+			throw e;
+		} finally {
+			jedisPool.returnResource(jedis);
+		}
+	}
+	
+	public static String getKeyTypeInRedis(JedisPool jedisPool, String key) {
+		Jedis jedis = null;
+		String keyType = null;
+		try {
+			jedis = jedisPool.getResource();
+			
+			keyType = jedis.type(key);
+			
+			if(keyType == null || keyType.equals("none")) {
+				return null;
+			} else {
+				return keyType;
+			}
+		} catch(JedisConnectionException e) {
+			jedisPool.returnBrokenResource(jedis);
+			throw e;
+		} finally {
+			jedisPool.returnResource(jedis);
+		}
+	}
+	
 	/**
 	 * 
 	 * @param keyPattern could be test.${userId}.a
@@ -64,8 +211,12 @@ public class KeySchemaUtil {
 	 */
 	public static DBTable parseDBTable(KeyPattern keyPattern, String key, ValueDesc valDesc) {
 		DBTable table = new DBTable();
-		
-		String tableName = parseTableName(keyPattern, valDesc);
+
+		String fieldName = null;
+		if(valDesc != null && FieldDesc.class.isAssignableFrom(valDesc.getClass())) {
+			fieldName = ((FieldDesc)valDesc).getFieldName();
+		}
+		String tableName = parseTableName(keyPattern, fieldName);
 		table.setTableName(tableName);
 		table.setComment("from redis:" + keyPattern.getKeyMatchPattern());
 		
@@ -92,18 +243,22 @@ public class KeySchemaUtil {
 	
 	private static String[] parsePrimaryKeys(ValueDesc valDesc) {
 		if(valDesc.getPrimaryKeysInData() != null && valDesc.getPrimaryKeysInData().length() > 0) {
-			StringTokenizer stk = new StringTokenizer(valDesc.getPrimaryKeysInData(), ",");
-			
-			String[] pks = new String[stk.countTokens()];
-			int i = 0;
-			while(stk.hasMoreTokens()) {
-				pks[i++] = stk.nextToken();
-			}
-			
-			return pks;
+			return splitStringByComma(valDesc.getPrimaryKeysInData());
 		} else {
 			return null;
 		}
+	}
+	
+	public static String[] splitStringByComma(String strTokens) {
+		StringTokenizer stk = new StringTokenizer(strTokens, ",");
+		
+		String[] strTokenArray = new String[stk.countTokens()];
+		int i = 0;
+		while(stk.hasMoreTokens()) {
+			strTokenArray[i++] = stk.nextToken();
+		}
+		
+		return strTokenArray;
 	}
 	
 	/**
@@ -112,7 +267,7 @@ public class KeySchemaUtil {
 	 * @param valDesc
 	 * @return lowercase
 	 */
-	public static String parseTableName(KeyPattern keyPattern, ValueDesc valDesc) {
+	public static String parseTableName(KeyPattern keyPattern, String fieldName) {
 		StringBuilder sb = new StringBuilder();
 		
 		char curC;
@@ -132,11 +287,11 @@ public class KeySchemaUtil {
 			}
 		}
 
-		if(valDesc != null && FieldDesc.class.isAssignableFrom(valDesc.getClass())) {
+		if(fieldName != null && fieldName.length() > 0) {
 			if(sb.charAt(sb.length() - 1) != '_') {
 				sb.append('_');
 			}
-			sb.append(((FieldDesc)valDesc).getFieldName());
+			sb.append(fieldName);
 		}
 		
 		return sb.toString().toLowerCase();

@@ -67,9 +67,11 @@ public class MainEntry {
 		System.out.println("--help");
 		System.out.println("-p keyPattern -h dataHandlerName -t threadCount -s scanCount");
 		System.out.println("-d schemaFile -h dataHandlerName -t threadCount -s scanCount");
+		System.out.println("-a keyPatternArray -h dataHandlerName -t threadCount -s scanCount");
 		System.out.println();
 		System.out.println("-p (optional, default empty): pattern to scan keys. e.g., *test*. Please see the doc of scan command of redis.");
-		System.out.println("-d (optional, if -p also assigned, the -p will be overrided.): The file path of schema description xml of KeySchema.");
+		System.out.println("-d (optional): The file path of schema description xml of KeySchema.");
+		System.out.println("-a (optional): keyPattern array(separated by comma, e.g., test.${userId},test.${shopId})");
 		System.out.println("-h (optional, default " + DefaultRedisDataExportHandler.class.getName() + "): the full class name (e.g., com.test.TestDataHandler) of the data handler which implements IRedisDataHandler.");
 		System.out.println("-t (optional, default 5): the count of thread running concurrently");
 		System.out.println("-s (optional, default 100): the count of scanning keys at one time in each thread");
@@ -93,9 +95,12 @@ public class MainEntry {
 		//default value
 		String keyPattern = null;
 		String schemaPath = null;
+		String keyPatternArray = null;
 		int threadCount = 5;
 		int scanCount = 100;
 		String redisDataHandlerName = DefaultRedisDataExportHandler.class.getName();
+
+		int keyParamCount = 0;
 		
 		try {
 			int i = 0;
@@ -110,8 +115,13 @@ public class MainEntry {
 					} else {
 						if(paramType.equals("-p")) {
 							keyPattern = args[i];
+							keyParamCount++;
 						} else if(paramType.equals("-d")) {
 							schemaPath = args[i];
+							keyParamCount++;
+						} else if(paramType.equals("-a")) {
+							keyPatternArray = args[i];
+							keyParamCount++;
 						} else if(paramType.equals("-h")) {
 							redisDataHandlerName = args[i];
 						} else if(paramType.equals("-t")) {
@@ -132,9 +142,18 @@ public class MainEntry {
 			outputHelpContent();
 			return;
 		}
+		if(keyParamCount > 1) {
+			throw new RuntimeException("-p -d -a, only one of them can be assigned");
+		}
 		
 		System.out.println("Params: :-) --------------------------------");
-		System.out.println("  keyPattern:" + keyPattern);
+		if(keyPattern != null) {
+			System.out.println("  keyPattern:" + keyPattern);
+		} else if (schemaPath != null) {
+			System.out.println("  schemaPath:" + schemaPath);
+		} else if (keyPatternArray != null) {
+			System.out.println("  keyPatternArray:" + keyPatternArray);
+		}
 		System.out.println("  redisDataHandlerName:" + redisDataHandlerName);
 		System.out.println("  threadCount:" + threadCount);
 		System.out.println("  scanCount:" + scanCount);
@@ -154,6 +173,8 @@ public class MainEntry {
 			keySchema = (KeySchema) xmlDes.Deserialize(
 					schemaFile.getAbsolutePath(), KeySchema.class, 
 					XmlDeserializer.DefaultCharset, defaultClassFinder);
+		} else if (keyPatternArray != null) {
+			//auto generate keySchema
 		}
 		
 		//Data Handler -----------------------------
