@@ -3,23 +3,23 @@ package com.beef.redisexport.schema.util;
 import java.util.HashMap;
 
 import com.beef.redisexport.schema.data.KeyDesc;
-import com.beef.redisexport.schema.data.KeyFieldDesc;
 import com.beef.redisexport.schema.data.KeySchema;
+import com.beef.redisexport.schema.data.ValueDesc;
 
 public class MKeySchema {
 	/**
-	 * key:keyPattern value: KeyDesc or KeyFieldDesc
+	 * key:keyPattern value: ValueDesc
 	 */
-	private HashMap<String, Object> keyDescMap = new HashMap<String, Object>();
+	private HashMap<String, ValueDesc> valueDescMap = new HashMap<String, ValueDesc>();
 
-	public HashMap<String, Object> getKeyDescMap() {
-		return keyDescMap;
+	public ValueDesc getValueDesc(String keyPattern, String fieldName) {
+		return valueDescMap.get(getMapKey(keyPattern, fieldName));
 	}
-
-	public void setKeyDescMap(HashMap<String, Object> keyDescMap) {
-		this.keyDescMap = keyDescMap;
+	
+	public void setValueDesc(String keyPattern, String fieldName, ValueDesc valueDesc) {
+		valueDescMap.put(getMapKey(keyPattern, fieldName), valueDesc);
 	}
-
+	
 	public static MKeySchema convertKeySchema(KeySchema keySchema) {
 		MKeySchema mKeySchema = new MKeySchema();
 		
@@ -27,19 +27,19 @@ public class MKeySchema {
 			KeyDesc keyDesc;
 			for(int i = 0; i < keySchema.getKeyDescs().size(); i++) {
 				keyDesc = keySchema.getKeyDescs().get(i);
-				mKeySchema.getKeyDescMap().put(keyDesc.getKeyPattern(), keyDesc);
-			}
-		}
-		
-		if(keySchema.getKeyFieldDescs() != null) {
-			KeyFieldDesc keyFieldDesc;
-			for(int i = 0; i < keySchema.getKeyFieldDescs().size(); i++) {
-				keyFieldDesc = keySchema.getKeyFieldDescs().get(i);
-				mKeySchema.getKeyDescMap().put(keyFieldDesc.getKeyPattern(), keyFieldDesc);
+				mKeySchema.setValueDesc(keyDesc.getKeyPattern(), keyDesc.getFieldName(), keyDesc.getValDesc());
 			}
 		}
 		
 		return mKeySchema;
+	}
+
+	private static String getMapKey(String keyPattern, String fieldName) {
+		if(fieldName == null || fieldName.length() > 0) {
+			return keyPattern;
+		} else {
+			return fieldName.concat(".").concat(fieldName);
+		}
 	}
 	
 }

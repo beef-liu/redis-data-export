@@ -4,10 +4,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class KeySchema {
+	
 	private List<KeyDesc> _keyDescs = new ArrayList<KeyDesc>();
 	
-	private List<KeyFieldDesc> _keyFieldDescs = new ArrayList<KeyFieldDesc>();
-
+	/**
+	 * Every KeyDesc is mapping to one key or one key-field. 
+	 * @return
+	 */
 	public List<KeyDesc> getKeyDescs() {
 		return _keyDescs;
 	}
@@ -16,14 +19,4 @@ public class KeySchema {
 		_keyDescs = keyDescs;
 	}
 
-	public List<KeyFieldDesc> getKeyFieldDescs() {
-		return _keyFieldDescs;
-	}
-
-	public void setKeyFieldDescs(List<KeyFieldDesc> keyFieldDescs) {
-		_keyFieldDescs = keyFieldDescs;
-	}
-
-	
-	
 }

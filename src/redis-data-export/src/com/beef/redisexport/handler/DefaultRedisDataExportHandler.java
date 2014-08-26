@@ -25,14 +25,27 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 	
 	private MKeySchema _mKeySchema = null;
 	
+	private String[] _keyPatternArray = null;
+	
+
 	@Override
-	public void init(JedisPool jedisPool, DBPool dbPool, KeySchema keySchema) {
+	public void initWithKeySchema(JedisPool jedisPool, DBPool dbPool,
+			KeySchema keySchema) {
 		_jedisPool = jedisPool;
 		_dbPool = dbPool;
 		
 		if(keySchema != null) {
 			_mKeySchema = MKeySchema.convertKeySchema(keySchema);
 		}
+	}
+	
+	@Override
+	public void initWithKeyPatternArray(JedisPool jedisPool, DBPool dbPool,
+			String[] keyPatternArray) {
+		_jedisPool = jedisPool;
+		_dbPool = dbPool;
+		
+		_keyPatternArray = keyPatternArray;
 	}
 	
 	@Override

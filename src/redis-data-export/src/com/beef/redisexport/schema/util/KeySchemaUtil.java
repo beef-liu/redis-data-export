@@ -1,26 +1,35 @@
 package com.beef.redisexport.schema.util;
 
+import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.StringTokenizer;
 
 import org.apache.log4j.Logger;
+import org.w3c.tools.codec.Base64FormatException;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.ScanParams;
 import redis.clients.jedis.ScanResult;
 import redis.clients.jedis.exceptions.JedisConnectionException;
+import MetoXML.XmlReader;
+import MetoXML.Base.XmlNode;
 
-import com.beef.redisexport.schema.data.FieldDesc;
 import com.beef.redisexport.schema.data.KeyDesc;
-import com.beef.redisexport.schema.data.KeyFieldDesc;
 import com.beef.redisexport.schema.data.KeySchema;
 import com.beef.redisexport.schema.data.ValueDesc;
 import com.beef.redisexport.util.DBPool;
+import com.beef.util.redis.RedisDataUtil;
+import com.beef.util.redis.RedisDataUtil.CompressAlgorithm;
+import com.beef.util.redis.compress.CompressException;
 
 public class KeySchemaUtil {
 	private final static Logger logger = Logger.getLogger(KeySchemaUtil.class);
+	
+	public static Charset DefaultCharset = Charset.forName("utf-8");
 
+	/*
 	public static KeySchema generateDefaultSchema(
 			JedisPool jedisPool, DBPool dbPool,
 			String[] keyPatternArray, int scanCount) {
@@ -49,39 +58,54 @@ public class KeySchemaUtil {
 		
 		return keySchema;
 	}
+	*/
 	
-	/**
-	 * 
-	 * @param keyPattern
-	 * @return KeyDesc or KeyFieldDesc
-	 */
-	public static Object generateDefaultKeyDescOrKeyFieldDesc(
+	public static KeyDesc generateDefaultKeyDesc(
 			JedisPool jedisPool, DBPool dbPool,
-			String keyPattern, int scanCount) {
-		String key = scanKeyPatternFor1Key(jedisPool, keyPattern, scanCount);
-		if(key == null) {
-			logger.warn("Key does not exists:" + keyPattern);
-			return null;
-		}
+			String keyPattern, String key, String fieldName, String value) throws IOException, Base64FormatException, CompressException {
+		KeyDesc keyDesc = new KeyDesc();
+		keyDesc.setKeyPattern(keyPattern);
+		keyDesc.setFieldName(fieldName);
 		
-		String keyType = getKeyTypeInRedis(jedisPool, key);
-		if(keyType == null) {
-			return null;
-		}
+		ValueDesc valDesc = new ValueDesc();
 		
-		if(keyType.equals("string")) {
-			
-		} else if(keyType.equals("list")) {
-			
-		} else if(keyType.equals("hash")) {
-			
-		} else if(keyType.equals("set")) {
-			throw new RuntimeException("Not support keyType:" + keyType + " of redis yet");
-		} else if(keyType.equals("zset")) {
-			throw new RuntimeException("Not support keyType:" + keyType + " of redis yet");
+		
+		CompressAlgorithm compressAlg = RedisDataUtil.detectValueCompressAlgorithm(value);
+		boolean isCompressed = false;
+		if(compressAlg == CompressAlgorithm.LZF) {
+			valDesc.setCompressMode(ValueDesc.COMPRESS_MODE_LZF);
+			RedisDataUtil.setCompressAlgorithm(CompressAlgorithm.LZF);
+			isCompressed = true;
+		} else if(compressAlg == CompressAlgorithm.GZIP) {
+			valDesc.setCompressMode(ValueDesc.COMPRESS_MODE_GZIP);
+			RedisDataUtil.setCompressAlgorithm(CompressAlgorithm.GZIP);
+			isCompressed = true;
 		} else {
-			throw new RuntimeException("Not support keyType:" + keyType + " of redis yet");
+			valDesc.setCompressMode("");
 		}
+		String decodedValue;
+		if(isCompressed) {
+			decodedValue = new String(
+					RedisDataUtil.decodeStringBytes(
+							value.getBytes(DefaultCharset), isCompressed),
+					DefaultCharset);
+		} else {
+			decodedValue = value;
+		}
+		
+		if(decodedValue.length() > 0) {
+			try {
+				XmlReader xmlReader = new XmlReader();
+				XmlNode xmlNode = xmlReader.StringToXmlNode(decodedValue, DefaultCharset);
+				logger.info("generateDefaultKeyDesc() Detected xml node:" + xmlNode.getName());
+				valDesc.setDataXml(true);
+			} catch(Throwable e) {
+				logger.info("generateDefaultKeyDesc() Not xml:" + decodedValue);
+			}
+		}
+		
+		//create table
+		String tableName = 
 	}
 	
 	/**
@@ -209,13 +233,10 @@ public class KeySchemaUtil {
 	 * @param keyDesc
 	 * @return Not include nonprimarykey columns.
 	 */
-	public static DBTable parseDBTable(KeyPattern keyPattern, String key, ValueDesc valDesc) {
+	public static DBTable parseDBTable(
+			KeyPattern keyPattern, String key, String fieldName, String value) {
 		DBTable table = new DBTable();
 
-		String fieldName = null;
-		if(valDesc != null && FieldDesc.class.isAssignableFrom(valDesc.getClass())) {
-			fieldName = ((FieldDesc)valDesc).getFieldName();
-		}
 		String tableName = parseTableName(keyPattern, fieldName);
 		table.setTableName(tableName);
 		table.setComment("from redis:" + keyPattern.getKeyMatchPattern());
@@ -227,6 +248,7 @@ public class KeySchemaUtil {
 			table.getPrimarykeySet().add(pk);
 		}
 		
+		/*
 		if(valDesc != null) {
 			String[] pks = parsePrimaryKeys(valDesc);
 			
@@ -237,10 +259,12 @@ public class KeySchemaUtil {
 				}
 			}
 		}
+		*/
 		
 		return table;
 	}
 	
+	/*
 	private static String[] parsePrimaryKeys(ValueDesc valDesc) {
 		if(valDesc.getPrimaryKeysInData() != null && valDesc.getPrimaryKeysInData().length() > 0) {
 			return splitStringByComma(valDesc.getPrimaryKeysInData());
@@ -248,6 +272,7 @@ public class KeySchemaUtil {
 			return null;
 		}
 	}
+	*/
 	
 	public static String[] splitStringByComma(String strTokens) {
 		StringTokenizer stk = new StringTokenizer(strTokens, ",");

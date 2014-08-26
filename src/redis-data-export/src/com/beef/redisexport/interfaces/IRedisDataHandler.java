@@ -9,7 +9,9 @@ import com.beef.redisexport.util.DBPool;
 public interface IRedisDataHandler {
 
 	
-	public void init(JedisPool jedisPool, DBPool dbPool, KeySchema keySchema);
+	public void initWithKeySchema(JedisPool jedisPool, DBPool dbPool, KeySchema keySchema);
+	
+	public void initWithKeyPatternArray(JedisPool jedisPool, DBPool dbPool, String[] keyPatternArray);
 	
 	/**
 	 * Notice: handleRedisData() will be invoked by multiple threads concurrently.

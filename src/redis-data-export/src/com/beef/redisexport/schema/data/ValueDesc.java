@@ -1,6 +1,9 @@
 package com.beef.redisexport.schema.data;
 
 public class ValueDesc {
+	public final static String COMPRESS_MODE_LZF = "lzf";
+	public final static String COMPRESS_MODE_GZIP = "gzip";
+	
 	/**
 	 * true: value is in xml format of data. Children nodes in xml are DB Column.
 	 */
@@ -9,7 +12,7 @@ public class ValueDesc {
 	/**
 	 * only be used when _isDataXml is true. Array of name of primary key, e.g. pkName1,pkName2,pkName3
 	 */
-	private String _primaryKeysInData = "";
+	//private String _primaryKeysInData = "";
 	
 	/**
 	 * empty: not compressed lzf: compressed in lzf  gzip:compressed in gzip
@@ -32,6 +35,7 @@ public class ValueDesc {
 		_compressMode = compressMode;
 	}
 
+	/*
 	public String getPrimaryKeysInData() {
 		return _primaryKeysInData;
 	}
@@ -39,5 +43,6 @@ public class ValueDesc {
 	public void setPrimaryKeysInData(String primaryKeysInData) {
 		_primaryKeysInData = primaryKeysInData;
 	}
+	*/
 	
 }
