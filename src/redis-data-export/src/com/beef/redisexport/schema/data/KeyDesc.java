@@ -11,6 +11,11 @@ public class KeyDesc {
 	 * be null when key type is not hash
 	 */
 	private String _fieldName = null;
+	
+	/**
+	 * DB Table Name
+	 */
+	private String _tableName = null;
 
 	private ValueDesc _valDesc = null;
 
@@ -38,5 +43,16 @@ public class KeyDesc {
 		_valDesc = valDesc;
 	}
 	
+	/**
+	 * DB Table Name
+	 * @return
+	 */
+	public String getTableName() {
+		return _tableName;
+	}
+
+	public void setTableName(String tableName) {
+		_tableName = tableName;
+	}
 	
 }

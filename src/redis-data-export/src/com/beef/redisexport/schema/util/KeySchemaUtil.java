@@ -2,10 +2,20 @@ package com.beef.redisexport.schema.util;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.sql.Connection;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.StringTokenizer;
 
 import org.apache.log4j.Logger;
+import org.apache.oro.text.regex.MalformedPatternException;
+import org.apache.oro.text.regex.MatchResult;
+import org.apache.oro.text.regex.Pattern;
+import org.apache.oro.text.regex.PatternCompiler;
+import org.apache.oro.text.regex.PatternMatcher;
+import org.apache.oro.text.regex.PatternMatcherInput;
+import org.apache.oro.text.regex.Perl5Compiler;
+import org.apache.oro.text.regex.Perl5Matcher;
 import org.w3c.tools.codec.Base64FormatException;
 
 import redis.clients.jedis.Jedis;
@@ -27,8 +37,75 @@ import com.beef.util.redis.compress.CompressException;
 public class KeySchemaUtil {
 	private final static Logger logger = Logger.getLogger(KeySchemaUtil.class);
 	
-	public static Charset DefaultCharset = Charset.forName("utf-8");
+	public final static Charset DefaultCharset = Charset.forName("utf-8");
+	
+	public final static int DEFAULT_PRIMARY_KEY_MAX_LEN = 255;
+	public final static String DEFAULT_FIELD_NAME_VALUE = "val";
 
+	private final static char[] REGEX_META_CHARS = {
+		'\\', '-', '!', '~', '@', '#', '$', '^',
+		'*', '(', ')', '{', '}', '+', '=', '|', '[', ']',
+		',', '.', '/', '<', '>', '?',
+		};
+	
+	private static PatternCompiler _compiler = new Perl5Compiler();
+
+	public static Pattern compileRegexPattern(KeyPattern keyPattern) throws MalformedPatternException {
+		StringBuilder keyPatternRegexExpr = new StringBuilder();
+		
+		//replace meta char
+		char c;
+		int k;
+		boolean isHandled = false;
+		for(int i = 0; i < keyPattern.getKeyMatchPattern().length(); i++) {
+			c = keyPattern.getKeyMatchPattern().charAt(i);
+			
+			if(c == '*') {
+				keyPatternRegexExpr.append("(.+)");
+			} else {
+				isHandled = false;
+				for(k = 0; k < REGEX_META_CHARS.length; k++) {
+					if (REGEX_META_CHARS[k] == c) {
+						isHandled = true;
+						
+						keyPatternRegexExpr.append("\\").append(c);
+					}
+				}
+				if(!isHandled) {
+					keyPatternRegexExpr.append(c);
+				}
+			}
+		}
+		
+		return _compiler.compile(keyPatternRegexExpr.toString());
+	}
+	/**
+	 * 
+	 * @param keyPattern
+	 * @param key
+	 * @return value list of _variateKeyNames
+	 */
+	public static List<String> analyzeKeyPattern(Pattern keyRegexPattern, String key) {
+		List<String> variateValList = null;
+		
+		PatternMatcher matcher = new Perl5Matcher();
+		MatchResult result;
+		PatternMatcherInput matcherInput = new PatternMatcherInput(key);
+		
+		if(matcher.contains(matcherInput, keyRegexPattern)) {
+			variateValList = new ArrayList<String>();
+			
+			result = matcher.getMatch();
+			for(int k = 0; k < result.groups(); k++) {
+				if(k != 0) {
+					variateValList.add(result.group(k));
+				}
+			}
+		}
+		
+		return variateValList;
+	}
+	
 	/*
 	public static KeySchema generateDefaultSchema(
 			JedisPool jedisPool, DBPool dbPool,
@@ -60,15 +137,14 @@ public class KeySchemaUtil {
 	}
 	*/
 	
-	public static KeyDesc generateDefaultKeyDesc(
-			JedisPool jedisPool, DBPool dbPool,
+	public static ValueDesc findoutValueDesc(
+			//JedisPool jedisPool, DBPool dbPool,
 			String keyPattern, String key, String fieldName, String value) throws IOException, Base64FormatException, CompressException {
-		KeyDesc keyDesc = new KeyDesc();
-		keyDesc.setKeyPattern(keyPattern);
-		keyDesc.setFieldName(fieldName);
+		if(value == null || value.length() == 0) {
+			return null;
+		}
 		
 		ValueDesc valDesc = new ValueDesc();
-		
 		
 		CompressAlgorithm compressAlg = RedisDataUtil.detectValueCompressAlgorithm(value);
 		boolean isCompressed = false;
@@ -103,9 +179,8 @@ public class KeySchemaUtil {
 				logger.info("generateDefaultKeyDesc() Not xml:" + decodedValue);
 			}
 		}
-		
-		//create table
-		String tableName = 
+
+		return valDesc;
 	}
 	
 	/**
@@ -115,7 +190,8 @@ public class KeySchemaUtil {
 	 * @param scanCount
 	 * @return key
 	 */
-	public static String scanKeyPatternFor1Key(JedisPool jedisPool, 
+	public static String scanKeyPatternFor1Key(
+			JedisPool jedisPool, 
 			String keyPattern, int scanCount) {
 		Jedis jedis = null;
 		try {
@@ -187,6 +263,8 @@ public class KeySchemaUtil {
 	 */
 	public static KeyPattern parseKeyPattern(String keyPattern) {
 		KeyPattern pattern = new KeyPattern();
+		
+		pattern.setKeyPattern(keyPattern);
 
 		StringBuilder sb = new StringBuilder();
 		int beginIndex = 0;
@@ -235,6 +313,40 @@ public class KeySchemaUtil {
 	 */
 	public static DBTable parseDBTable(
 			KeyPattern keyPattern, String key, String fieldName, String value) {
+		DBTable dbTable = parseDBTableOnlyPK(keyPattern, key, fieldName);
+		
+		dbTable.getCols().add(new DBCol(DEFAULT_FIELD_NAME_VALUE, defaultDBColMaxLength(value.length())));
+		
+		return dbTable;
+	}
+	
+	private static int defaultDBColMaxLength(int lengthOfSampleColValue) {
+		if(lengthOfSampleColValue == 0) {
+			return 32;
+		} else if(lengthOfSampleColValue < 128) {
+			return lengthOfSampleColValue * 2;
+		} else {
+			return (int) Math.ceil(lengthOfSampleColValue / 256) * 256; 
+		}
+	}
+
+	public static DBTable parseDBTable(
+			KeyPattern keyPattern, String key, String fieldName, XmlNode dataXmlNode) {
+		DBTable dbTable = parseDBTableOnlyPK(keyPattern, key, fieldName);
+		
+		XmlNode node = (XmlNode) dataXmlNode.GetFirstChild();
+		DBCol dbCol;
+		while(node != null) {
+			dbCol = new DBCol(node.getName().trim(), defaultDBColMaxLength(node.getContent().length()));
+			dbTable.getCols().add(dbCol);
+			
+			node = node.getNextNode();
+		}
+		
+		return dbTable;
+	}
+	
+	private static DBTable parseDBTableOnlyPK(KeyPattern keyPattern, String key, String fieldName) {
 		DBTable table = new DBTable();
 
 		String tableName = parseTableName(keyPattern, fieldName);
@@ -242,10 +354,12 @@ public class KeySchemaUtil {
 		table.setComment("from redis:" + keyPattern.getKeyMatchPattern());
 		
 		String pk;
+		DBCol dbCol;
 		for(int i = 0; i < keyPattern.getVariateKeyNames().size(); i++) {
 			pk = keyPattern.getVariateKeyNames().get(i);
-			table.getPrimaryKeys().add(pk);
-			table.getPrimarykeySet().add(pk);
+			dbCol = new DBCol(pk, DEFAULT_PRIMARY_KEY_MAX_LEN);
+			table.getPrimaryKeys().add(dbCol);
+			table.getPrimarykeyMap().put(pk, dbCol);
 		}
 		
 		/*

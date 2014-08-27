@@ -19,5 +19,6 @@
 	<classpathentry kind="lib" path="lib/SalamaReflect.jar"/>
 	<classpathentry kind="lib" path="lib/SalamaUtil.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/4"/>
+	<classpathentry kind="lib" path="lib/oro-2.0.8.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

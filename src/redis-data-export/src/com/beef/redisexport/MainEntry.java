@@ -17,6 +17,7 @@ import com.beef.redisexport.config.RedisConfig;
 import com.beef.redisexport.handler.DefaultRedisDataExportHandler;
 import com.beef.redisexport.interfaces.IRedisDataHandler;
 import com.beef.redisexport.schema.data.KeySchema;
+import com.beef.redisexport.schema.util.KeySchemaUtil;
 import com.salama.reflect.PreScanClassFinder;
 
 public class MainEntry {
@@ -183,13 +184,22 @@ public class MainEntry {
 		try {
 			Class<?> redisDataHandlerClass = Class.forName(redisDataHandlerName);
 			redisDataHandler = (IRedisDataHandler) redisDataHandlerClass.newInstance();
-			redisDataHandler.init(redisDataExportContext.getJedisPool(), redisDataExportContext.getDbPool(), keySchema);
+			if(keySchema != null) {
+				redisDataHandler.initWithKeySchema(
+						redisDataExportContext.getJedisPool(), redisDataExportContext.getDbPool(), 
+						keySchema);
+			} else if (keyPatternArray != null) {
+				redisDataHandler.initWithKeyPatternArray(
+						redisDataExportContext.getJedisPool(), redisDataExportContext.getDbPool(), 
+						KeySchemaUtil.splitStringByComma(keyPatternArray));
+			}
 		} catch(Throwable e) {
 			logger.error(null, e);
 			System.out.println("Initialize data handler failed (" + redisDataHandlerName + ") :-! ------------------------");
 			return;
 		}
 		
+		/*
 		ArrayList<String> keyPatternList = new ArrayList<String>();
 		if(schemaPath == null) {
 			keyPatternList.add(keyPattern);
@@ -205,19 +215,14 @@ public class MainEntry {
 				}
 			}
 		}
+		*/
 		
 		//start execute 
-		for(int i = 0; i < keyPatternList.size(); i++) {
-			logger.info("iterate keyPattern:" + keyPatternList.get(i) + " ----------------------------------");
-			System.out.println("iterate keyPattern:" + keyPatternList.get(i) + " ----------------------------------");
-			
-			RedisDataIterator dataIterator = new RedisDataIterator(
-					redisDataExportContext.getJedisPool(),
-					keyPatternList.get(i), 
-					threadCount, scanCount, redisDataHandler);
-			dataIterator.waitForever();
-		}
-		
+		RedisDataIterator dataIterator = new RedisDataIterator(
+				redisDataExportContext.getJedisPool(),
+				keyPattern, 
+				threadCount, scanCount, redisDataHandler);
+		dataIterator.waitForever();
 	}
 	
 }

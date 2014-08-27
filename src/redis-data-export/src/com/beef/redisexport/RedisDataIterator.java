@@ -26,7 +26,7 @@ public class RedisDataIterator {
 	private JedisPool _jedisPool;
 	//private DBPool _dbPool;
 	
-	private String _keyPattern;
+	//private String _keyPattern;
 	//private int _iterateLoopCount;
 	//private int _threadCount;
 	private ScanParams _scanParams;
@@ -60,7 +60,7 @@ public class RedisDataIterator {
 		//_dbPool = dbPool;
 		_jedisPool = jedisPool;
 		
-		_keyPattern = keyPattern;
+		//_keyPattern = keyPattern;
 		//_iterateLoopCount = iterateLoopCount;
 		//_threadCount = threadCount;
 		
@@ -172,7 +172,7 @@ public class RedisDataIterator {
 
 			
 			try {
-				_redisDataHandler.handleRedisKey(_keyPattern, key, keyType);
+				_redisDataHandler.handleRedisKey(key, keyType);
 			} catch(Throwable e) {
 				logger.error(null, e);
 			}
@@ -198,7 +198,7 @@ public class RedisDataIterator {
 				
 				jedis = _jedisPool.getResource();
 				
-				logger.info("scanKey() keyPattern:" + _keyPattern + " cursor:" + cursor + " taskNum:" + taskNum);
+				logger.info("scanKey()" + " cursor:" + cursor + " taskNum:" + taskNum);
 				ScanResult<String> result = jedis.scan(cursor, _scanParams);
 				_scanCursor = result.getStringCursor();
 				

@@ -1,23 +1,30 @@
 package com.beef.redisexport.schema.util;
 
 import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.beef.redisexport.schema.data.KeyDesc;
 import com.beef.redisexport.schema.data.KeySchema;
-import com.beef.redisexport.schema.data.ValueDesc;
 
 public class MKeySchema {
 	/**
-	 * key:keyPattern value: ValueDesc
+	 * key:keyPattern value: KeyDesc
 	 */
-	private HashMap<String, ValueDesc> valueDescMap = new HashMap<String, ValueDesc>();
+	private Map<String, KeyDesc> _keyDescMap = new ConcurrentHashMap<String, KeyDesc>();
 
-	public ValueDesc getValueDesc(String keyPattern, String fieldName) {
-		return valueDescMap.get(getMapKey(keyPattern, fieldName));
+	public KeyDesc getKeyDesc(String keyPattern, String fieldName) {
+		return _keyDescMap.get(getMapKey(keyPattern, fieldName));
 	}
 	
-	public void setValueDesc(String keyPattern, String fieldName, ValueDesc valueDesc) {
-		valueDescMap.put(getMapKey(keyPattern, fieldName), valueDesc);
+	/**
+	 * 
+	 * @param keyPattern
+	 * @param fieldName could be null
+	 * @param valueDesc
+	 */
+	public void setKeyDesc(String keyPattern, String fieldName, KeyDesc keyDesc) {
+		_keyDescMap.put(getMapKey(keyPattern, fieldName), keyDesc);
 	}
 	
 	public static MKeySchema convertKeySchema(KeySchema keySchema) {
@@ -27,7 +34,7 @@ public class MKeySchema {
 			KeyDesc keyDesc;
 			for(int i = 0; i < keySchema.getKeyDescs().size(); i++) {
 				keyDesc = keySchema.getKeyDescs().get(i);
-				mKeySchema.setValueDesc(keyDesc.getKeyPattern(), keyDesc.getFieldName(), keyDesc.getValDesc());
+				mKeySchema.setKeyDesc(keyDesc.getKeyPattern(), keyDesc.getFieldName(), keyDesc);
 			}
 		}
 		

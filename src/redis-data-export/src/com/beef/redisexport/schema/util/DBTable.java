@@ -1,8 +1,10 @@
 package com.beef.redisexport.schema.util;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class DBTable {
@@ -10,11 +12,11 @@ public class DBTable {
     
     private String _comment = "";
 
-    private List<String> _primaryKeys = new ArrayList<String>();
+    private List<DBCol> _primaryKeys = new ArrayList<DBCol>();
     
-    private Set<String> _primarykeySet = new HashSet<String>();
+    private Map<String, DBCol> _primarykeyMap = new HashMap<String, DBCol>();
 
-	private List<String> _cols = new ArrayList<String>();
+	private List<DBCol> _cols = new ArrayList<DBCol>();
 
 	public String getTableName() {
 		return _tableName;
@@ -32,32 +34,24 @@ public class DBTable {
 		_comment = comment;
 	}
 
-	public List<String> getPrimaryKeys() {
+	public List<DBCol> getPrimaryKeys() {
 		return _primaryKeys;
 	}
 
-	public void setPrimaryKeys(List<String> primaryKeys) {
+	public void setPrimaryKeys(List<DBCol> primaryKeys) {
 		_primaryKeys = primaryKeys;
 	}
 
-	/**
-	 * Not include primary keys
-	 * @return
-	 */
-	public List<String> getCols() {
+	public Map<String, DBCol> getPrimarykeyMap() {
+		return _primarykeyMap;
+	}
+
+	public List<DBCol> getCols() {
 		return _cols;
 	}
 
-	public void setCols(List<String> cols) {
+	public void setCols(List<DBCol> cols) {
 		_cols = cols;
 	}
-    
-    
-    public Set<String> getPrimarykeySet() {
-		return _primarykeySet;
-	}
-
-	public void setPrimarykeySet(Set<String> primarykeySet) {
-		_primarykeySet = primarykeySet;
-	}
+	
 }
