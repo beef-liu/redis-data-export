@@ -25,6 +25,7 @@ import redis.clients.jedis.ScanResult;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 import MetoXML.XmlReader;
 import MetoXML.Base.XmlNode;
+import MetoXML.Base.XmlParseException;
 
 import com.beef.redisexport.schema.data.KeyDesc;
 import com.beef.redisexport.schema.data.KeySchema;
@@ -40,7 +41,9 @@ public class KeySchemaUtil {
 	public final static Charset DefaultCharset = Charset.forName("utf-8");
 	
 	public final static int DEFAULT_PRIMARY_KEY_MAX_LEN = 255;
-	public final static String DEFAULT_FIELD_NAME_VALUE = "val";
+	
+	public final static String DEFAULT_DB_COL_NAME_VALUE = "val";
+	public final static String DEFAULT_DB_COL_AUTO_ROW_NUM = "_export_auto_increment_row_num_";
 
 	private final static char[] REGEX_META_CHARS = {
 		'\\', '-', '!', '~', '@', '#', '$', '^',
@@ -310,13 +313,75 @@ public class KeySchemaUtil {
 	 * @param key
 	 * @param keyDesc
 	 * @return Not include nonprimarykey columns.
+	 * @throws XmlParseException 
+	 * @throws IOException 
 	 */
 	public static DBTable parseDBTable(
-			KeyPattern keyPattern, String key, String fieldName, String value) {
+			KeyPattern keyPattern, String key, String fieldName, String value, boolean isDataXml) throws IOException, XmlParseException {
 		DBTable dbTable = parseDBTableOnlyPK(keyPattern, key, fieldName);
-		
-		dbTable.getCols().add(new DBCol(DEFAULT_FIELD_NAME_VALUE, defaultDBColMaxLength(value.length())));
-		
+
+		if(!isDataXml) {
+			dbTable.addCol(
+				new DBCol(
+					DEFAULT_DB_COL_NAME_VALUE, 
+					defaultDBColMaxLength(value.length()),
+					"varchar", ""
+					)
+			);
+		} else {
+			XmlReader xmlReader = new XmlReader();
+			XmlNode dataXmlNode = xmlReader.StringToXmlNode(value, DefaultCharset);
+			XmlNode node1 = dataXmlNode.getFirstChildNode();
+			
+			if(node1.getName().equalsIgnoreCase("list")) {
+				//it is a List, then add a primary key named "row_num"
+				dbTable.addPrimaryKey(
+						new DBCol(
+								DEFAULT_DB_COL_AUTO_ROW_NUM, 20,
+								"bigint", "auto_increment")
+						);
+				
+				XmlNode node2 = node1.getFirstChildNode();
+				if(node2 == null) {
+					//not handle when there is not data in list
+					return null;
+				}
+				
+				String colName;
+				while(node2 != null) {
+					colName = node2.getName().toLowerCase();
+					
+					//col must not in primary keys
+					if(dbTable.getPrimaryKey(colName) == null) {
+						dbTable.addCol(new DBCol(
+								colName, 
+								defaultDBColMaxLength(node2.getContent().length()), 
+								"varchar", "")
+						);
+					}
+					
+					node2 = node2.getNextNode();
+				}
+			} else {
+				String colName;
+				while(node1 != null) {
+					colName = node1.getName().toLowerCase();
+					
+					//col must not in primary keys
+					if(dbTable.getPrimaryKey(colName) == null) {
+						dbTable.addCol(new DBCol(
+								colName, 
+								defaultDBColMaxLength(node1.getContent().length()), 
+								"varchar", "")
+						);
+					}
+					
+					node1 = node1.getNextNode();
+				}
+			}
+			
+		}
+	
 		return dbTable;
 	}
 	
@@ -330,22 +395,6 @@ public class KeySchemaUtil {
 		}
 	}
 
-	public static DBTable parseDBTable(
-			KeyPattern keyPattern, String key, String fieldName, XmlNode dataXmlNode) {
-		DBTable dbTable = parseDBTableOnlyPK(keyPattern, key, fieldName);
-		
-		XmlNode node = (XmlNode) dataXmlNode.GetFirstChild();
-		DBCol dbCol;
-		while(node != null) {
-			dbCol = new DBCol(node.getName().trim(), defaultDBColMaxLength(node.getContent().length()));
-			dbTable.getCols().add(dbCol);
-			
-			node = node.getNextNode();
-		}
-		
-		return dbTable;
-	}
-	
 	private static DBTable parseDBTableOnlyPK(KeyPattern keyPattern, String key, String fieldName) {
 		DBTable table = new DBTable();
 
@@ -356,10 +405,9 @@ public class KeySchemaUtil {
 		String pk;
 		DBCol dbCol;
 		for(int i = 0; i < keyPattern.getVariateKeyNames().size(); i++) {
-			pk = keyPattern.getVariateKeyNames().get(i);
-			dbCol = new DBCol(pk, DEFAULT_PRIMARY_KEY_MAX_LEN);
-			table.getPrimaryKeys().add(dbCol);
-			table.getPrimarykeyMap().put(pk, dbCol);
+			pk = keyPattern.getVariateKeyNames().get(i).toLowerCase();
+			dbCol = new DBCol(pk, DEFAULT_PRIMARY_KEY_MAX_LEN, "char", "", false);
+			table.addPrimaryKey(dbCol);
 		}
 		
 		/*

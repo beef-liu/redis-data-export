@@ -90,7 +90,7 @@ public class DBTableUtil {
     		"FROM information_schema.tables " +
     		"WHERE upper(table_name) = upper('{0}')";
     private final static String SQL_GET_COLUMNS_INFO = 
-    		"SELECT COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, COLUMN_TYPE, CHARACTER_MAXIMUM_LENGTH, COLUMN_KEY, COLUMN_COMMENT, EXTRA " +
+    		"SELECT COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, COLUMN_KEY, COLUMN_COMMENT, EXTRA " +
     		"FROM information_schema.columns " +
     		"WHERE upper(table_name) = upper('{0}') order by ORDINAL_POSITION";
 	public static DBTable getDBTable(Connection conn, String tableName) throws SQLException {
@@ -134,16 +134,17 @@ public class DBTableUtil {
 
                 col.setColName(rs.getString("COLUMN_NAME"));
                 col.setColMaxLength(rs.getInt("CHARACTER_MAXIMUM_LENGTH"));
+                col.setDataType(rs.getString("DATA_TYPE"));
+                col.setExtra(rs.getString("EXTRA"));
 
                 colKey = rs.getString("COLUMN_KEY");
                 if (colKey.toUpperCase().equals("PRI"))
                 {
-                	table.getPrimaryKeys().add(col);
-                	table.getPrimarykeyMap().put(col.getColName(), col);
+                	table.addPrimaryKey(col);
                 }
                 else
                 {
-                	table.getCols().add(col);
+                	table.addCol(col);
                 }
         	}
         	
@@ -156,26 +157,29 @@ public class DBTableUtil {
     	}
 	}
 	
-	private final static String ALTER_TABLE_COL_MAX_LENGTH = "ALTER TABLE ${0} CHANGE COLUMN ${1} ${2} ${3}(${4})";
-	public static void alterTableChangeColumn(Connection conn, String tableName, 
-			String oldColName, String colName, String colType, int colMaxLength, boolean isNullable) throws SQLException {
+	private final static String ALTER_TABLE_ADD_COLUMN = "ALTER TABLE ${0} ADD COLUMN ${1} ${2}(${3})";
+	public static void alterTableAddColumn(Connection conn, String tableName, 
+			DBCol dbCol) throws SQLException {
 		String identifierQuote = getIdentifierQuoteString(conn);
 		
 		StringBuilder sql = new StringBuilder();
 		sql.append(StringUtil.formatString(
-						ALTER_TABLE_COL_MAX_LENGTH, 
-						identifierQuote.concat(tableName).concat(identifierQuote),
-						identifierQuote.concat(oldColName).concat(identifierQuote),
-						identifierQuote.concat(colName).concat(identifierQuote),
-						colType,
-						String.valueOf(colMaxLength)
-						)
-				);
+				ALTER_TABLE_ADD_COLUMN, 
+				identifierQuote.concat(tableName).concat(identifierQuote),
+				identifierQuote.concat(dbCol.getColName()).concat(identifierQuote),
+				dbCol.getDataType(),
+				String.valueOf(dbCol.getColMaxLength())
+				)
+		);
 		
-		if(isNullable) {
+		if(dbCol.isNullable()) {
 			sql.append(" NULL DEFAULT NULL");
 		} else {
 			sql.append(" NOT NULL");
+		}
+		
+		if(dbCol.getExtra() != null) {
+			sql.append(" ").append(dbCol.getExtra());
 		}
 		
 		//execute sql
@@ -193,6 +197,48 @@ public class DBTableUtil {
 		}
 	}
 	
+	private final static String ALTER_TABLE_CHANGE_COLUMN = "ALTER TABLE ${0} CHANGE COLUMN ${1} ${2} ${3}(${4})";
+	public static void alterTableChangeColumn(Connection conn, String tableName, 
+			DBCol dbCol) throws SQLException {
+		String identifierQuote = getIdentifierQuoteString(conn);
+		
+		StringBuilder sql = new StringBuilder();
+		sql.append(StringUtil.formatString(
+				ALTER_TABLE_CHANGE_COLUMN, 
+				identifierQuote.concat(tableName).concat(identifierQuote),
+				identifierQuote.concat(dbCol.getColName()).concat(identifierQuote),
+				identifierQuote.concat(dbCol.getColName()).concat(identifierQuote),
+				dbCol.getDataType(),
+				String.valueOf(dbCol.getColMaxLength())
+				)
+		);
+		
+		if(dbCol.isNullable()) {
+			sql.append(" NULL DEFAULT NULL");
+		} else {
+			sql.append(" NOT NULL");
+		}
+		
+		if(dbCol.getExtra() != null) {
+			sql.append(" ").append(dbCol.getExtra());
+		}
+		
+		//execute sql
+		PreparedStatement stmt = null;
+		
+		try {
+			stmt = conn.prepareStatement(sql.toString());
+			
+			stmt.executeUpdate();
+    	} finally {
+    		try {
+        		stmt.close();
+    		} catch(SQLException e) {
+    		}
+		}
+		
+	}
+	
 	public static void createTable(Connection conn, DBTable dbTable) throws SQLException {
 		StringBuilder sql = new StringBuilder();
 		
@@ -204,8 +250,8 @@ public class DBTableUtil {
 		StringBuilder pks = new StringBuilder();
 		
 		//primary keys
-		for(int i = 0; i < dbTable.getPrimaryKeys().size(); i++) {
-			dbCol = dbTable.getPrimaryKeys().get(i);
+		for(int i = 0; i < dbTable.countOfPrimaryKey(); i++) {
+			dbCol = dbTable.getPrimaryKey(i);
 			
 			sql.append("  ").append(identifierQuote.concat(dbCol.getColName()).concat(identifierQuote))
 			.append(" ").append(StringUtil.formatString(DEFAULT_DB_TYPE_PK, Integer.toString(dbCol.getColMaxLength())))
@@ -218,8 +264,8 @@ public class DBTableUtil {
 		}
 		
 		//other cols
-		for(int i = 0; i < dbTable.getCols().size(); i++) {
-			dbCol = dbTable.getCols().get(i);
+		for(int i = 0; i < dbTable.countOfCols(); i++) {
+			dbCol = dbTable.getCol(i);
 			
 			sql.append("  ").append(identifierQuote.concat(dbCol.getColName()).concat(identifierQuote))
 			.append(" ").append(StringUtil.formatString(DEFAULT_DB_TYPE_COL, Integer.toString(dbCol.getColMaxLength())))

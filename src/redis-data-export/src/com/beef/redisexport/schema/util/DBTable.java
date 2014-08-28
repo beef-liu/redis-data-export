@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class DBTable {
     private String _tableName = "";
@@ -13,10 +14,10 @@ public class DBTable {
     private String _comment = "";
 
     private List<DBCol> _primaryKeys = new ArrayList<DBCol>();
-    
-    private Map<String, DBCol> _primarykeyMap = new HashMap<String, DBCol>();
+    private Map<String, DBCol> _primarykeyMap = new ConcurrentHashMap<String, DBCol>();
 
 	private List<DBCol> _cols = new ArrayList<DBCol>();
+	private Map<String, DBCol> _colMap = new ConcurrentHashMap<String, DBCol>();
 
 	public String getTableName() {
 		return _tableName;
@@ -34,6 +35,45 @@ public class DBTable {
 		_comment = comment;
 	}
 
+	public int countOfPrimaryKey() {
+		return _primaryKeys.size();
+	}
+	
+	public void addPrimaryKey(DBCol dbCol) {
+		DBCol oldCol = _primarykeyMap.put(dbCol.getColName(), dbCol);
+		if(oldCol == null) {
+			_primaryKeys.add(dbCol);
+		}
+	}
+	
+	public DBCol getPrimaryKey(int index) {
+		return _primaryKeys.get(index);
+	}
+	
+	public DBCol getPrimaryKey(String colName) {
+		return _primarykeyMap.get(colName);
+	}
+
+	public int countOfCols() {
+		return _cols.size();
+	}
+	
+	public void addCol(DBCol dbCol) {
+		DBCol oldCol = _colMap.put(dbCol.getColName(), dbCol);
+		if(oldCol == null) {
+			_cols.add(dbCol);
+		}
+	}
+	
+	public DBCol getCol(int index) {
+		return _cols.get(index);
+	}
+	
+	public DBCol getCol(String colName) {
+		return _colMap.get(colName);
+	}
+	
+	/*
 	public List<DBCol> getPrimaryKeys() {
 		return _primaryKeys;
 	}
@@ -53,5 +93,6 @@ public class DBTable {
 	public void setCols(List<DBCol> cols) {
 		_cols = cols;
 	}
+	*/
 	
 }

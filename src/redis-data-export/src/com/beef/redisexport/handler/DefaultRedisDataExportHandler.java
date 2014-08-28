@@ -35,6 +35,7 @@ import com.beef.redisexport.schema.util.KeySchemaUtil;
 import com.beef.redisexport.schema.util.MKeySchema;
 import com.beef.redisexport.util.DBPool;
 import com.beef.util.redis.RedisDataUtil;
+import com.beef.util.redis.RedisDataUtil.CompressAlgorithm;
 import com.beef.util.redis.compress.CompressException;
 
 public class DefaultRedisDataExportHandler implements IRedisDataHandler {
@@ -266,14 +267,25 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 			
 			//decode value if compressed
 			String decodedValue = null;
-			if(keyDesc.getValDesc().getCompressMode()) {
-				decodedValue = RedisDataUtil.decodeStringBytes(value, isUseCompress);
+			if (keyDesc.getValDesc().getCompressMode() == null) {
+				//not compressed
+				decodedValue = value;
 			} else {
-				
+				if(keyDesc.getValDesc().getCompressMode().equals(ValueDesc.COMPRESS_MODE_LZF)) {
+					//lzf
+					decodedValue = new String(
+							RedisDataUtil.decodeStringBytes(value.getBytes(KeySchemaUtil.DefaultCharset), CompressAlgorithm.LZF),
+							KeySchemaUtil.DefaultCharset);
+				} else if(keyDesc.getValDesc().getCompressMode().equals(ValueDesc.COMPRESS_MODE_GZIP)) {
+					//gzip
+					decodedValue = new String(
+							RedisDataUtil.decodeStringBytes(value.getBytes(KeySchemaUtil.DefaultCharset), CompressAlgorithm.GZIP),
+							KeySchemaUtil.DefaultCharset);
+				}
 			}
 			
 			//check DB table
-			
+			DBTable dbTable = 
 		} catch(Throwable e) {
 			logger.error(null, e);
 		}
@@ -282,6 +294,7 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 	protected KeyDesc findKeyDesc(KeyPattern keyPattern, 
 			String key, String fieldName, String value) throws IOException, Base64FormatException, CompressException {
 		KeyDesc keyDesc = _mKeySchema.getKeyDesc(keyPattern.getKeyPattern(), fieldName);
+		
 		if(keyDesc == null) {
 			keyDesc = new KeyDesc();
 			keyDesc.setKeyPattern(keyPattern.getKeyPattern());
@@ -297,8 +310,19 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 		return keyDesc;
 	}
 	
-	protected KeyPattern analyzeKeyPattern(String key, String fieldName, String value) {
+	protected DBTable findDBTable(KeyDesc keyDesc) {
+		DBTable dbTable = _tableMap.get(keyDesc.getTableName());
 		
+		if(dbTable == null) {
+			dbTable = KeySchemaUtil.parseDBTable(keyPattern, key, fieldName, value);
+			
+			if(dbTable == null) {
+				return null;
+			}
+					
+		}
+		
+		return dbTable;
 	}
 
 }
