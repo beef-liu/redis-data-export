@@ -1,11 +1,8 @@
 package com.beef.redisexport.schema.util;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class DBTable {
@@ -14,9 +11,17 @@ public class DBTable {
     private String _comment = "";
 
     private List<DBCol> _primaryKeys = new ArrayList<DBCol>();
-    private Map<String, DBCol> _primarykeyMap = new ConcurrentHashMap<String, DBCol>();
+    public List<DBCol> getPrimaryKeys() {
+		return _primaryKeys;
+	}
+
+	private Map<String, DBCol> _primarykeyMap = new ConcurrentHashMap<String, DBCol>();
 
 	private List<DBCol> _cols = new ArrayList<DBCol>();
+	public List<DBCol> getCols() {
+		return _cols;
+	}
+
 	private Map<String, DBCol> _colMap = new ConcurrentHashMap<String, DBCol>();
 
 	public String getTableName() {

@@ -43,7 +43,7 @@ public class KeySchemaUtil {
 	public final static int DEFAULT_PRIMARY_KEY_MAX_LEN = 255;
 	
 	public final static String DEFAULT_DB_COL_NAME_VALUE = "val";
-	public final static String DEFAULT_DB_COL_AUTO_ROW_NUM = "_export_auto_increment_row_num_";
+	public final static String DEFAULT_DB_COL_EXPORT_LIST_ROW_NUM = "_export_list_row_num_";
 
 	private final static char[] REGEX_META_CHARS = {
 		'\\', '-', '!', '~', '@', '#', '$', '^',
@@ -317,66 +317,69 @@ public class KeySchemaUtil {
 	 * @throws IOException 
 	 */
 	public static DBTable parseDBTable(
-			KeyPattern keyPattern, String key, String fieldName, String value, boolean isDataXml) throws IOException, XmlParseException {
-		DBTable dbTable = parseDBTableOnlyPK(keyPattern, key, fieldName);
+			KeyPattern keyPattern, String fieldName, String value, boolean isDataXml) throws IOException, XmlParseException {
+		DBTable dbTable = parseDBTableOnlyPK(keyPattern, fieldName);
 
 		if(!isDataXml) {
 			dbTable.addCol(
 				new DBCol(
 					DEFAULT_DB_COL_NAME_VALUE, 
 					defaultDBColMaxLength(value.length()),
-					"varchar", ""
+					"varchar", "",
+					false
 					)
 			);
 		} else {
 			XmlReader xmlReader = new XmlReader();
-			XmlNode dataXmlNode = xmlReader.StringToXmlNode(value, DefaultCharset);
-			XmlNode node1 = dataXmlNode.getFirstChildNode();
+			XmlNode rootNode = xmlReader.StringToXmlNode(value, DefaultCharset);
 			
-			if(node1.getName().equalsIgnoreCase("list")) {
-				//it is a List, then add a primary key named "row_num"
-				dbTable.addPrimaryKey(
-						new DBCol(
-								DEFAULT_DB_COL_AUTO_ROW_NUM, 20,
-								"bigint", "auto_increment")
-						);
-				
-				XmlNode node2 = node1.getFirstChildNode();
-				if(node2 == null) {
+			if(rootNode.getName().equalsIgnoreCase("list")) {
+				XmlNode dataNode = rootNode.getFirstChildNode();
+				if(dataNode == null) {
 					//not handle when there is not data in list
 					return null;
 				}
 				
+				//it is a List, then add a primary key named "row_num"
+				dbTable.addPrimaryKey(
+						new DBCol(
+								DEFAULT_DB_COL_EXPORT_LIST_ROW_NUM, 20,
+								"bigint", "", 
+								false)
+						);
+				
+				XmlNode colNode = dataNode.getFirstChildNode();
 				String colName;
-				while(node2 != null) {
-					colName = node2.getName().toLowerCase();
+				while(colNode != null) {
+					colName = colNode.getName().toLowerCase();
 					
 					//col must not in primary keys
 					if(dbTable.getPrimaryKey(colName) == null) {
 						dbTable.addCol(new DBCol(
 								colName, 
-								defaultDBColMaxLength(node2.getContent().length()), 
-								"varchar", "")
+								defaultDBColMaxLength(colNode.getContent().length()), 
+								"varchar", "", true)
 						);
 					}
 					
-					node2 = node2.getNextNode();
+					colNode = colNode.getNextNode();
 				}
 			} else {
+				XmlNode colNode = rootNode.getFirstChildNode();
 				String colName;
-				while(node1 != null) {
-					colName = node1.getName().toLowerCase();
+				while(colNode != null) {
+					colName = colNode.getName().toLowerCase();
 					
 					//col must not in primary keys
 					if(dbTable.getPrimaryKey(colName) == null) {
 						dbTable.addCol(new DBCol(
 								colName, 
-								defaultDBColMaxLength(node1.getContent().length()), 
-								"varchar", "")
+								defaultDBColMaxLength(colNode.getContent().length()), 
+								"varchar", "", true)
 						);
 					}
 					
-					node1 = node1.getNextNode();
+					colNode = colNode.getNextNode();
 				}
 			}
 			
@@ -385,7 +388,7 @@ public class KeySchemaUtil {
 		return dbTable;
 	}
 	
-	private static int defaultDBColMaxLength(int lengthOfSampleColValue) {
+	public static int defaultDBColMaxLength(int lengthOfSampleColValue) {
 		if(lengthOfSampleColValue == 0) {
 			return 32;
 		} else if(lengthOfSampleColValue < 128) {
@@ -395,7 +398,7 @@ public class KeySchemaUtil {
 		}
 	}
 
-	private static DBTable parseDBTableOnlyPK(KeyPattern keyPattern, String key, String fieldName) {
+	private static DBTable parseDBTableOnlyPK(KeyPattern keyPattern, String fieldName) {
 		DBTable table = new DBTable();
 
 		String tableName = parseTableName(keyPattern, fieldName);

@@ -9,6 +9,8 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.log4j.pattern.LiteralPatternConverter;
+
 import com.salama.util.StringUtil;
 import com.salama.util.db.DBMetaUtil;
 import com.salama.util.db.DBUtil;
@@ -16,9 +18,8 @@ import com.salama.util.db.DBUtil;
 public class DBTableUtil {
 	private static String IdentifierQuoteString = null;
 	
-	public final static String DEFAULT_DB_TYPE_PK = "char({0})";
-	public final static String DEFAULT_DB_TYPE_COL = "varchar({0})";
-	public final static String SQL_PRIMARY_KEY = "PRIMARY KEY ({0})";
+	//public final static String DEFAULT_DB_TYPE_PK = "char({0})";
+	//public final static String DEFAULT_DB_TYPE_COL = "varchar({0})";
 	
 	
 	/*
@@ -53,13 +54,13 @@ public class DBTableUtil {
 		}
 	}
 
-	public static String getIdentifierQuoteString(Connection conn) throws SQLException {
+	public static String quoteSqlIdentifier(Connection conn, String sqlIdentifier) throws SQLException {
 		if(IdentifierQuoteString == null) {
 			DatabaseMetaData metaData = conn.getMetaData();
 			IdentifierQuoteString = metaData.getIdentifierQuoteString();
 		}
 		
-		return IdentifierQuoteString;
+		return IdentifierQuoteString.concat(sqlIdentifier).concat(IdentifierQuoteString);
 	}
 
 	private final static String SQL_SHOW_TABLES = "show tables";
@@ -157,30 +158,18 @@ public class DBTableUtil {
     	}
 	}
 	
-	private final static String ALTER_TABLE_ADD_COLUMN = "ALTER TABLE ${0} ADD COLUMN ${1} ${2}(${3})";
+	/**
+	 * {0}:table name {1}:column definition
+	 */
+	private final static String SQL_ALTER_TABLE_ADD_COLUMN = "ALTER TABLE {0} ADD COLUMN {1}";
 	public static void alterTableAddColumn(Connection conn, String tableName, 
 			DBCol dbCol) throws SQLException {
-		String identifierQuote = getIdentifierQuoteString(conn);
-		
-		StringBuilder sql = new StringBuilder();
-		sql.append(StringUtil.formatString(
-				ALTER_TABLE_ADD_COLUMN, 
-				identifierQuote.concat(tableName).concat(identifierQuote),
-				identifierQuote.concat(dbCol.getColName()).concat(identifierQuote),
-				dbCol.getDataType(),
-				String.valueOf(dbCol.getColMaxLength())
-				)
-		);
-		
-		if(dbCol.isNullable()) {
-			sql.append(" NULL DEFAULT NULL");
-		} else {
-			sql.append(" NOT NULL");
-		}
-		
-		if(dbCol.getExtra() != null) {
-			sql.append(" ").append(dbCol.getExtra());
-		}
+		String sql = StringUtil.formatString(
+				SQL_ALTER_TABLE_ADD_COLUMN,
+				quoteSqlIdentifier(conn, tableName),
+				makeSqlOfColumnDefinition(conn, 
+						dbCol.getColName(), dbCol.getDataType(), dbCol.getColMaxLength(), dbCol.isNullable(), null, dbCol.getExtra())
+				);
 		
 		//execute sql
 		PreparedStatement stmt = null;
@@ -197,31 +186,19 @@ public class DBTableUtil {
 		}
 	}
 	
-	private final static String ALTER_TABLE_CHANGE_COLUMN = "ALTER TABLE ${0} CHANGE COLUMN ${1} ${2} ${3}(${4})";
+	/**
+	 * {0}:table name {1}:old column name {2}:column definition
+	 */
+	private final static String SQL_ALTER_TABLE_CHANGE_COLUMN = "ALTER TABLE {0} CHANGE COLUMN {1} {2}";
 	public static void alterTableChangeColumn(Connection conn, String tableName, 
 			DBCol dbCol) throws SQLException {
-		String identifierQuote = getIdentifierQuoteString(conn);
-		
-		StringBuilder sql = new StringBuilder();
-		sql.append(StringUtil.formatString(
-				ALTER_TABLE_CHANGE_COLUMN, 
-				identifierQuote.concat(tableName).concat(identifierQuote),
-				identifierQuote.concat(dbCol.getColName()).concat(identifierQuote),
-				identifierQuote.concat(dbCol.getColName()).concat(identifierQuote),
-				dbCol.getDataType(),
-				String.valueOf(dbCol.getColMaxLength())
-				)
-		);
-		
-		if(dbCol.isNullable()) {
-			sql.append(" NULL DEFAULT NULL");
-		} else {
-			sql.append(" NOT NULL");
-		}
-		
-		if(dbCol.getExtra() != null) {
-			sql.append(" ").append(dbCol.getExtra());
-		}
+		String sql = StringUtil.formatString(
+				SQL_ALTER_TABLE_CHANGE_COLUMN,
+				quoteSqlIdentifier(conn, tableName),
+				dbCol.getColName(),
+				makeSqlOfColumnDefinition(conn, 
+						dbCol.getColName(), dbCol.getDataType(), dbCol.getColMaxLength(), dbCol.isNullable(), null, dbCol.getExtra())
+				);
 		
 		//execute sql
 		PreparedStatement stmt = null;
@@ -238,13 +215,14 @@ public class DBTableUtil {
 		}
 		
 	}
-	
+
+	private final static String SQL_PRIMARY_KEY = "PRIMARY KEY ({0})";
 	public static void createTable(Connection conn, DBTable dbTable) throws SQLException {
 		StringBuilder sql = new StringBuilder();
 		
-		String identifierQuote = getIdentifierQuoteString(conn);
-		
-		sql.append("CREATE TABLE ").append(identifierQuote).append(dbTable.getTableName()).append(identifierQuote).append(" (").append("\n");
+		sql.append("CREATE TABLE IF NOT EXISTS ")
+			.append(quoteSqlIdentifier(conn, dbTable.getTableName()))
+			.append(" (").append("\n");
 		
 		DBCol dbCol;
 		StringBuilder pks = new StringBuilder();
@@ -253,31 +231,32 @@ public class DBTableUtil {
 		for(int i = 0; i < dbTable.countOfPrimaryKey(); i++) {
 			dbCol = dbTable.getPrimaryKey(i);
 			
-			sql.append("  ").append(identifierQuote.concat(dbCol.getColName()).concat(identifierQuote))
-			.append(" ").append(StringUtil.formatString(DEFAULT_DB_TYPE_PK, Integer.toString(dbCol.getColMaxLength())))
-			.append(" NOT NULL ").append(",").append("\n");
+			sql.append("  ").append(makeSqlOfColumnDefinition(
+					conn, dbCol.getColName(), dbCol.getDataType(), dbCol.getColMaxLength(), dbCol.isNullable(), null, dbCol.getExtra()))
+					.append(",").append("\n");
 			
 			if(i != 0) {
 				pks.append(",");
 			}
-			pks.append(identifierQuote.concat(dbCol.getColName()).concat(identifierQuote));
+			pks.append(quoteSqlIdentifier(conn, dbCol.getColName()));
 		}
 		
 		//other cols
 		for(int i = 0; i < dbTable.countOfCols(); i++) {
 			dbCol = dbTable.getCol(i);
 			
-			sql.append("  ").append(identifierQuote.concat(dbCol.getColName()).concat(identifierQuote))
-			.append(" ").append(StringUtil.formatString(DEFAULT_DB_TYPE_COL, Integer.toString(dbCol.getColMaxLength())))
-			.append(" DEFAULT NULL ").append(",").append("\n");
+			sql.append("  ").append(makeSqlOfColumnDefinition(
+					conn, dbCol.getColName(), dbCol.getDataType(), dbCol.getColMaxLength(), dbCol.isNullable(), null, dbCol.getExtra()))
+					.append(",").append("\n");
 		}
 		
 		//pk
 		sql.append("  ").append(StringUtil.formatString(SQL_PRIMARY_KEY, pks.toString())).append("\n");
+		
 		//table comment
-		sql.append(") ENGINE=InnoDB DEFAULT CHARSET=utf8 ");
+		sql.append(") ENGINE=InnoDB DEFAULT CHARSET=utf8");
 		if(dbTable.getComment() != null && dbTable.getComment().length() > 0) {
-			sql.append("COMMENT='").append(dbTable.getComment()).append("'");
+			sql.append(" COMMENT='").append(dbTable.getComment()).append("'");
 		}
 		
 		//execute sql
@@ -294,5 +273,193 @@ public class DBTableUtil {
     		}
 		}
 	} 
+
+	/**
+	 * e.g., col1 char(32) null default null
+	 * @param conn
+	 * @param colName
+	 * @param dataType
+	 * @param maxLength
+	 * @param nullable
+	 * @param defaultValue
+	 * @return
+	 * @throws SQLException 
+	 */
+	private static String makeSqlOfColumnDefinition(
+			Connection conn,
+			String colName, String dataType, int maxLength,
+			boolean nullable, String defaultValue, String extra
+			) throws SQLException {
+		StringBuilder sql = new StringBuilder();
+		
+		sql.append(" ").append(quoteSqlIdentifier(conn, colName));
+		sql.append(" ").append(dataType);
+		if(maxLength > 0) {
+			sql.append("(").append(String.valueOf(maxLength)).append(")");
+		}
+		if(nullable) {
+			sql.append(" null");
+		} else {
+			sql.append(" not null");
+		}
+		
+		if(defaultValue != null && defaultValue.length() > 0) {
+			sql.append(" default ").append("'").append(defaultValue).append("'");
+		}
+		
+		if(extra != null && extra.length() > 0) {
+			sql.append(" ").append(extra);
+		}
+		
+		return sql.toString();
+	}
+
+	public static int insertOrUpdate(Connection conn,
+			String tableName,
+			List<DBCol> primaryKeyList, List<String> primarykeyValueList,
+			List<DBCol> otherColList, List<String> otherColValueList) throws SQLException {
+		try {
+			return insert(conn, tableName, primaryKeyList, primarykeyValueList, otherColList, otherColValueList);
+		} catch(SQLException e) {
+			if(e.getClass().getSimpleName().equalsIgnoreCase("MySQLIntegrityConstraintViolationException")) {
+				return update(conn, tableName, primaryKeyList, primarykeyValueList, otherColList, otherColValueList);
+			} else {
+				throw e;
+			}			
+		}
+	}
 	
+	public static int insert(Connection conn,
+			String tableName,
+			List<DBCol> primaryKeyList, List<String> primarykeyValueList,
+			List<DBCol> otherColList, List<String> otherColValueList) throws SQLException {
+		//make sql ---------------------------
+		StringBuilder sqlNames = new StringBuilder();
+		StringBuilder sqlValues = new StringBuilder();
+		
+		DBCol col;
+		for(int i = 0; i < primarykeyValueList.size(); i++) {
+			col = primaryKeyList.get(i);
+			
+			if("auto_increment".equalsIgnoreCase(col.getExtra())) {
+				continue;
+			}
+			
+			if(sqlNames.length() > 0) {
+				sqlNames.append(",");
+			}
+			sqlNames.append(quoteSqlIdentifier(conn, col.getColName()));
+			
+			if(sqlValues.length() > 0) {
+				sqlValues.append(",");
+			}
+			sqlValues.append("?");
+		}
+		
+		for(int i = 0; i < otherColList.size(); i++) {
+			col = otherColList.get(i);
+			
+			if(sqlNames.length() > 0) {
+				sqlNames.append(",");
+			}
+			sqlNames.append(quoteSqlIdentifier(conn, col.getColName()));
+			
+			if(sqlValues.length() > 0) {
+				sqlValues.append(",");
+			}
+			sqlValues.append("?");
+		}
+		
+		StringBuilder sql = new StringBuilder();
+		
+		sql.append("insert into ").append(quoteSqlIdentifier(conn, tableName)).append(" (");
+		sql.append(sqlNames.toString());
+		sql.append(") values (");
+		sql.append(sqlValues.toString());
+		sql.append(")");
+		
+		//execute ---------------------------
+		PreparedStatement stmt = null;
+
+		try {
+			stmt = conn.prepareStatement(sql.toString());
+			
+			int index = 1;
+			
+			for(int i = 0; i < primarykeyValueList.size(); i++) {
+				col = primaryKeyList.get(i);
+				
+				if("auto_increment".equalsIgnoreCase(col.getExtra())) {
+					continue;
+				}
+				
+				stmt.setString(index++, primarykeyValueList.get(i));
+			}
+			
+			for(int i = 0; i < otherColList.size(); i++) {
+				stmt.setString(index++, otherColValueList.get(i));
+			}
+			
+			return stmt.executeUpdate();
+		} finally {
+			stmt.close();
+		}
+	}
+	
+	public static int update(Connection conn,
+			String tableName,
+			List<DBCol> primaryKeyList, List<String> primarykeyValueList,
+			List<DBCol> otherColList, List<String> otherColValueList) throws SQLException {
+		//make sql ---------------------------
+		StringBuilder sqlSetValues = new StringBuilder();
+		StringBuilder sqlWhereCondition = new StringBuilder();
+		
+		DBCol col;
+
+		for(int i = 0; i < otherColList.size(); i++) {
+			col = otherColList.get(i);
+			
+			if(sqlSetValues.length() > 0) {
+				sqlSetValues.append(",");
+			}
+			sqlSetValues.append(" ").append(quoteSqlIdentifier(conn, col.getColName())).append(" = ?");
+		}
+		for(int i = 0; i < primarykeyValueList.size(); i++) {
+			col = primaryKeyList.get(i);
+			
+			if(sqlWhereCondition.length() > 0) {
+				sqlWhereCondition.append(" and");
+			}
+			sqlWhereCondition.append(" ").append(quoteSqlIdentifier(conn, col.getColName())).append(" = ?");
+		}
+		
+		
+		StringBuilder sql = new StringBuilder();
+		
+		sql.append("update ").append(quoteSqlIdentifier(conn, tableName)).append(" set ");
+		sql.append(sqlSetValues.toString());
+		sql.append(" where ");
+		sql.append(sqlWhereCondition.toString());
+		
+		//execute ---------------------------
+		PreparedStatement stmt = null;
+
+		try {
+			stmt = conn.prepareStatement(sql.toString());
+			
+			int index = 1;
+			
+			for(int i = 0; i < otherColList.size(); i++) {
+				stmt.setString(index++, otherColValueList.get(i));
+			}
+			for(int i = 0; i < primarykeyValueList.size(); i++) {
+				stmt.setString(index++, primarykeyValueList.get(i));
+			}
+			
+			return stmt.executeUpdate();
+		} finally {
+			stmt.close();
+		}
+	}
+
 }

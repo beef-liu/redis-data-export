@@ -7,8 +7,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -22,12 +24,16 @@ import org.w3c.tools.codec.Base64FormatException;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.exceptions.JedisConnectionException;
+import MetoXML.XmlReader;
+import MetoXML.Base.XmlNode;
+import MetoXML.Base.XmlParseException;
 import MetoXML.Util.ClassFinder;
 
 import com.beef.redisexport.interfaces.IRedisDataHandler;
 import com.beef.redisexport.schema.data.KeyDesc;
 import com.beef.redisexport.schema.data.KeySchema;
 import com.beef.redisexport.schema.data.ValueDesc;
+import com.beef.redisexport.schema.util.DBCol;
 import com.beef.redisexport.schema.util.DBTable;
 import com.beef.redisexport.schema.util.DBTableUtil;
 import com.beef.redisexport.schema.util.KeyPattern;
@@ -240,7 +246,7 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 	protected void handleRedisKey(String key, String fieldName, String value) {
 		try {
 			if(value == null || value.length() == 0) {
-				logger.debug("value is null. key:" + key + " fieldName:" + fieldName);
+				logger.debug("handleRedisKey() value is null. key:" + key + " fieldName:" + fieldName);
 				return;
 			}
 			
@@ -258,9 +264,13 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 			}
 			
 			if(variateKeyValueList == null) {
-				logger.warn("Not found keyPattern for key:" + key);
+				logger.warn("handleRedisKey() Not found keyPattern for key:" + key);
 				return;
 			}
+			
+			logger.debug("handleRedisKey()" 
+					+ " keyPattern:" + keyPattern.getKeyPattern() 
+					+ " keyMatchPattern:" + keyPattern.getKeyMatchPattern());
 			
 			//find keyDesc
 			KeyDesc keyDesc = findKeyDesc(keyPattern, key, fieldName, value);
@@ -285,7 +295,17 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 			}
 			
 			//check DB table
-			DBTable dbTable = 
+			DBTable dbTable = findDBTable(keyDesc, keyPattern, fieldName, decodedValue);
+			if(dbTable == null) {
+				logger.warn("handleRedisKey() Not enough information to create DB table." 
+						+ " keyPattern:" + keyPattern.getKeyPattern() 
+						+ " key:" + key + " fieldName:" + fieldName + " decodedValue:" + decodedValue);
+				return;
+			}
+			
+			//insert or update into table
+			int updCnt = insertValueIntoDBTable(dbTable, keyPattern, variateKeyValueList, keyDesc.getValDesc(), decodedValue);
+			logger.info("handleRedisKey() updCnt:" + updCnt);
 		} catch(Throwable e) {
 			logger.error(null, e);
 		}
@@ -310,19 +330,184 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 		return keyDesc;
 	}
 	
-	protected DBTable findDBTable(KeyDesc keyDesc) {
+	protected DBTable findDBTable(KeyDesc keyDesc, KeyPattern keyPattern, String fieldName, String value) 
+			throws IOException, XmlParseException, SQLException {
 		DBTable dbTable = _tableMap.get(keyDesc.getTableName());
 		
 		if(dbTable == null) {
-			dbTable = KeySchemaUtil.parseDBTable(keyPattern, key, fieldName, value);
+			//parse DBTable
+			dbTable = KeySchemaUtil.parseDBTable(
+					keyPattern, fieldName, value, keyDesc.getValDesc().isDataXml()
+					);
 			
 			if(dbTable == null) {
 				return null;
 			}
-					
+			
+			//create table
+			Connection conn = null;
+			try {
+				conn = _dbPool.getConnection();
+				
+				DBTableUtil.createTable(conn, dbTable);
+			} finally {
+				conn.close();
+			}
+			
+			//add into map
+			_tableMap.put(dbTable.getTableName(), dbTable);
 		}
 		
 		return dbTable;
 	}
 
+	protected int insertValueIntoDBTable(
+			DBTable dbTable, 
+			KeyPattern keyPattern, List<String> variateKeyValueList,
+			ValueDesc valDesc, String value 
+			) throws SQLException {
+		int updCnt = 0;
+		
+		Connection conn = null;
+		try {
+			conn = _dbPool.getConnection();
+			conn.setAutoCommit(true);
+			
+			List<String> primarykeyValueList = new ArrayList<String>();
+			primarykeyValueList.addAll(variateKeyValueList);
+			
+			if(valDesc.isDataXml()) {
+				List<String> otherColValueList = new ArrayList<String>();
+
+				XmlReader xmlReader = new XmlReader();
+				XmlNode rootNode = xmlReader.StringToXmlNode(value, KeySchemaUtil.DefaultCharset);
+				
+				if(rootNode.getName().equalsIgnoreCase("list")) {
+					XmlNode dataNode = rootNode.getFirstChildNode();
+					if(dataNode == null) {
+						//not handle when there is not data in list
+						return 0;
+					}
+					
+					//it is a List, then there is "row_num"
+					primarykeyValueList.add("0");
+					
+					String colName;
+					String colVal;
+					int index = 0;
+					HashMap<String, String> colValMap = new HashMap<String, String>();
+					while(dataNode != null) {
+						XmlNode colNode = dataNode.getFirstChildNode();
+						primarykeyValueList.set(primarykeyValueList.size() - 1, String.valueOf(index + 1));
+						
+						//one row
+						try {
+							colValMap.clear();
+							otherColValueList.clear();
+							
+							while(colNode != null) {
+								colName = colNode.getName().toLowerCase();
+								colVal = colNode.getContent();
+								
+								//col must not in primary keys
+								if(dbTable.getPrimaryKey(colName) == null) {
+									colValMap.put(colName, colVal);
+								}
+								
+								colNode = colNode.getNextNode();
+							}
+							
+							for(int i = 0; i < dbTable.countOfCols(); i++) {
+								colName = dbTable.getCol(i).getColName();
+								
+								colVal = colValMap.get(colName);
+								otherColValueList.add(colVal);
+							}
+							
+							//insert or update
+							updCnt += DBTableUtil.insertOrUpdate(conn, 
+									dbTable.getTableName(), 
+									dbTable.getPrimaryKeys(), primarykeyValueList, 
+									dbTable.getCols(), otherColValueList);
+						} catch(Throwable e) {
+							logger.error(null, e);
+						}
+						
+						dataNode = dataNode.getNextNode();
+						index++;
+					}
+				} else {
+					XmlNode colNode = rootNode.getFirstChildNode();
+					String colName;
+					String colVal;
+					
+					HashMap<String, String> colValMap = new HashMap<String, String>();
+					//colValMap.clear();
+					otherColValueList.clear();
+					
+					while(colNode != null) {
+						colName = colNode.getName().toLowerCase();
+						colVal = colNode.getContent();
+						
+						//col must not in primary keys
+						if(dbTable.getPrimaryKey(colName) == null) {
+							colValMap.put(colName, colVal);
+						}
+						
+						colNode = colNode.getNextNode();
+					}
+					
+					for(int i = 0; i < dbTable.countOfCols(); i++) {
+						colName = dbTable.getCol(i).getColName();
+						
+						colVal = colValMap.get(colName);
+						otherColValueList.add(colVal);
+					}
+					
+					//insert or update
+					updCnt += DBTableUtil.insertOrUpdate(conn, 
+							dbTable.getTableName(), 
+							dbTable.getPrimaryKeys(), primarykeyValueList, 
+							dbTable.getCols(), otherColValueList);
+					
+				}
+			} else {
+				List<String> otherColValueList = new ArrayList<String>();
+				otherColValueList.add(value);
+				
+				//insert or update
+				updCnt += DBTableUtil.insertOrUpdate(conn, 
+						dbTable.getTableName(), 
+						dbTable.getPrimaryKeys(), primarykeyValueList, 
+						dbTable.getCols(), otherColValueList);
+			}
+			
+			return updCnt;
+		} catch(Throwable e) {
+			logger.error(null, e);
+			return updCnt;
+		} finally {
+			try {
+				conn.setAutoCommit(false);
+			} catch(Throwable e) {
+			}
+			try {
+				conn.close();
+			} catch(Throwable e) {
+			}
+		}
+		
+	}
+	
+	private void checkColumnExists(Connection conn, DBTable dbTable, String colName, String colValue) {
+		if(dbTable.getCol(colName) == null) {
+			//not exists
+			dbTable.addCol(new DBCol(
+					colName, 
+					KeySchemaUtil.defaultDBColMaxLength(colValue.length()), 
+					"varchar", "", true)
+			);
+			DBTableUtil.alterTableAddColumn(conn, dbTable.getTableName(), dbCol);
+		}
+	}
 }
