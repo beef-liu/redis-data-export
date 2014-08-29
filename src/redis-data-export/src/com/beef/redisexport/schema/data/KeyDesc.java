@@ -2,8 +2,8 @@ package com.beef.redisexport.schema.data;
 
 public class KeyDesc {
 	/**
-	 * Indicate DB Table column by ${colName}
-	 * e.g., test.${ymd}.${userId}, and scan key match "test.*.*" in redis.
+	 * Indicate DB Table column by {colName}
+	 * e.g., test.{ymd}.{userId}, and scan key match "test.*.*" in redis.
 	 */
 	private String _keyPattern = null;
 

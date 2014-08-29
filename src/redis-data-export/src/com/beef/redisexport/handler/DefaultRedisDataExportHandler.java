@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.apache.log4j.Logger;
 import org.apache.oro.text.regex.MalformedPatternException;
@@ -124,7 +125,23 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 		
 		for(int i = 0; i < _keyPatternArray.size(); i++) {
 			_keyRegexPatternList.add(KeySchemaUtil.compileRegexPattern(_keyPatternArray.get(i)));
+			
+			outputLogOfKeyPattern(_keyPatternArray.get(i));
 		}
+	}
+	
+	private static void outputLogOfKeyPattern(KeyPattern keyPattern) {
+		logger.info("initKeyRegexPatternList() keyPattern:" + keyPattern.getKeyPattern() + " keyMatchPattern:" + keyPattern.getKeyMatchPattern());
+		
+		StringBuilder sb = new StringBuilder();
+		sb.append(" key variable names:");
+		for(int k = 0; k < keyPattern.getVariateKeyNames().size(); k++) {
+			if(k > 0) {
+				sb.append(",");
+			}
+			sb.append(keyPattern.getVariateKeyNames().get(k));
+		}
+		logger.info("initKeyRegexPatternList() " + sb.toString());
 	}
 
 	protected void initDBTables() throws SQLException {
@@ -143,6 +160,8 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 				dbTable = DBTableUtil.getDBTable(conn, tableName);
 				
 				_tableMap.put(tableName, dbTable);
+				
+				logger.info("initDBTables() load table info from DB:" + tableName);
 			}
 			
 		} finally {
@@ -302,9 +321,11 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 						+ " key:" + key + " fieldName:" + fieldName + " decodedValue:" + decodedValue);
 				return;
 			}
-			
+	
 			//insert or update into table
-			int updCnt = insertValueIntoDBTable(dbTable, keyPattern, variateKeyValueList, keyDesc.getValDesc(), decodedValue);
+			int updCnt = insertValueIntoDBTable(
+					dbTable, keyPattern, variateKeyValueList, 
+					keyDesc.getValDesc(), decodedValue);
 			logger.info("handleRedisKey() updCnt:" + updCnt);
 		} catch(Throwable e) {
 			logger.error(null, e);
@@ -350,6 +371,8 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 				conn = _dbPool.getConnection();
 				
 				DBTableUtil.createTable(conn, dbTable);
+				
+				logger.info("findDBTable() create DB table:" + dbTable.getTableName());
 			} finally {
 				conn.close();
 			}
@@ -422,6 +445,10 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 								
 								colVal = colValMap.get(colName);
 								otherColValueList.add(colVal);
+								
+								//check col
+								DBCol dbCol = checkColumnExists(conn, dbTable, colName, colVal);
+								checkColumnMaxLength(conn, dbTable, dbCol, colVal);
 							}
 							
 							//insert or update
@@ -462,6 +489,10 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 						
 						colVal = colValMap.get(colName);
 						otherColValueList.add(colVal);
+						
+						//check col
+						DBCol dbCol = checkColumnExists(conn, dbTable, colName, colVal);
+						checkColumnMaxLength(conn, dbTable, dbCol, colVal);
 					}
 					
 					//insert or update
@@ -499,15 +530,89 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 		
 	}
 	
-	private void checkColumnExists(Connection conn, DBTable dbTable, String colName, String colValue) {
-		if(dbTable.getCol(colName) == null) {
-			//not exists
-			dbTable.addCol(new DBCol(
-					colName, 
-					KeySchemaUtil.defaultDBColMaxLength(colValue.length()), 
-					"varchar", "", true)
-			);
-			DBTableUtil.alterTableAddColumn(conn, dbTable.getTableName(), dbCol);
+	private final ReentrantReadWriteLock _lockForAccessLockMapForDBCol = new ReentrantReadWriteLock();
+	private final Map<String, ReentrantReadWriteLock> _lockMapForChangeDBCol = new ConcurrentHashMap<String, ReentrantReadWriteLock>();
+	
+	private DBCol checkColumnExists(Connection conn, DBTable dbTable, String colName, String colValue) throws SQLException {
+		DBCol dbCol = null;
+		dbCol = dbTable.getCol(colName); 
+		if(dbCol != null) {
+			return dbCol;
 		}
+		
+		ReentrantReadWriteLock lockForChangeDBCol = acquireLockForChangeCol(
+				dbTable.getTableName(), colName);
+		lockForChangeDBCol.writeLock().lock();
+		try {
+			dbCol = dbTable.getCol(colName);
+			if(dbCol == null) {
+				//not exists
+				logger.info("checkColumnExists() Column not exists." 
+						+ " table:" + dbTable.getTableName() + ", colName:" + colName);
+				
+				dbCol = new DBCol(
+						colName, 
+						KeySchemaUtil.defaultDBColMaxLength(colValue.length()), 
+						"varchar", "", true);
+				DBTableUtil.alterTableAddColumn(conn, dbTable.getTableName(), dbCol);
+
+				dbTable.addCol(dbCol);
+				logger.info("checkColumnExists() Column Added. colName:" + colName); 
+			}
+		} finally {
+			lockForChangeDBCol.writeLock().unlock();
+		}
+
+		return dbCol;
+	}
+	
+	private void checkColumnMaxLength(Connection conn, DBTable dbTable, DBCol dbCol, String colValue) throws SQLException {
+		int valLen = colValue.length();
+		if(valLen > dbCol.getColMaxLength()) {
+			
+			ReentrantReadWriteLock lockForChangeDBCol = acquireLockForChangeCol(
+					dbTable.getTableName(), dbCol.getColName());
+			
+			lockForChangeDBCol.writeLock().lock();
+			try {
+				if(valLen > dbCol.getColMaxLength()) {
+					//change column length
+					int newMaxLen = KeySchemaUtil.defaultDBColMaxLength(valLen);
+					logger.info("checkColumnMaxLength() Column max length is going to be changed to " + newMaxLen + "." 
+							+ " table:" + dbTable.getTableName() + ", colName:" + dbCol.getColName());
+					
+					DBCol newDBCol = new DBCol(dbCol.getColName(), newMaxLen, dbCol.getDataType(), dbCol.getExtra(), dbCol.isNullable());
+					DBTableUtil.alterTableChangeColumn(conn, dbTable.getTableName(), newDBCol);
+
+					dbCol.setColMaxLength(newMaxLen);
+
+					logger.info("checkColumnMaxLength() Column max length is changed to " + newMaxLen); 
+				}
+			} finally {
+				lockForChangeDBCol.writeLock().unlock();
+			}
+		}
+	}
+	
+	private ReentrantReadWriteLock acquireLockForChangeCol(String tableName, String colName) {
+		String keyForLock = keyOfLockForChangeDBColMap(tableName, colName);
+		ReentrantReadWriteLock lockForChangeDBCol = null;
+		
+		_lockForAccessLockMapForDBCol.readLock().lock();
+		try {
+			lockForChangeDBCol = _lockMapForChangeDBCol.get(keyForLock);
+			if(lockForChangeDBCol == null) {
+				lockForChangeDBCol = new ReentrantReadWriteLock();
+				_lockMapForChangeDBCol.put(keyForLock, lockForChangeDBCol);
+			}
+		} finally {
+			_lockForAccessLockMapForDBCol.readLock().unlock();
+		}
+		
+		return lockForChangeDBCol;
+	}
+	
+	private static String keyOfLockForChangeDBColMap(String tableName, String colName) {
+		return tableName.concat(".").concat(colName);
 	}
 }

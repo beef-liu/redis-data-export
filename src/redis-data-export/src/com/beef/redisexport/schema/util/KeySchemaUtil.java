@@ -40,6 +40,9 @@ public class KeySchemaUtil {
 	
 	public final static Charset DefaultCharset = Charset.forName("utf-8");
 	
+	public final static String KEY_PATTERN_VARIABLE_PREFIX = "{";
+	public final static String KEY_PATTERN_VARIABLE_SUFFIX = "}";
+	
 	public final static int DEFAULT_PRIMARY_KEY_MAX_LEN = 255;
 	
 	public final static String DEFAULT_DB_COL_NAME_VALUE = "val";
@@ -261,7 +264,7 @@ public class KeySchemaUtil {
 	
 	/**
 	 * 
-	 * @param keyPattern could be test.${userId}.a
+	 * @param keyPattern could be test.{userId}.a
 	 * @return
 	 */
 	public static KeyPattern parseKeyPattern(String keyPattern) {
@@ -274,32 +277,32 @@ public class KeySchemaUtil {
 		int index = 0;
 		int index2 = 0;
 		while(beginIndex <= keyPattern.length()) {
-			index = keyPattern.indexOf("${", beginIndex);
+			index = keyPattern.indexOf(KEY_PATTERN_VARIABLE_PREFIX, beginIndex);
 			
 			if(index < 0) {
 				sb.append(keyPattern.substring(beginIndex));
 				break;
 			}
 			
-			index2 = keyPattern.indexOf('}', index);
+			index2 = keyPattern.indexOf(KEY_PATTERN_VARIABLE_SUFFIX, index);
 			if(index2 < 0) {
 				throw new RuntimeException("Wrong keyPattern:" + keyPattern);
 			}
 			
-			//substring before ${
+			//substring before {
 			sb.append(keyPattern.substring(beginIndex, index));
 
 			//append *
 			sb.append('*');
 			
-			//substring between ${ and }, (variate key name)
+			//substring between { and }, (variate key name)
 			if(pattern.getVariateKeyNames() == null) {
 				pattern.setVariateKeyNames(new ArrayList<String>());
 			}
-			pattern.getVariateKeyNames().add(keyPattern.substring(index + 2, index2).trim());
+			pattern.getVariateKeyNames().add(keyPattern.substring(index + KEY_PATTERN_VARIABLE_PREFIX.length(), index2).trim());
 			
 			//set beginIndex after }
-			beginIndex = index2 + 1;
+			beginIndex = index2 + KEY_PATTERN_VARIABLE_SUFFIX.length();
 		}
 
 		pattern.setKeyMatchPattern(sb.toString());
