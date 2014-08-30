@@ -53,8 +53,13 @@ public class KeySchemaUtil {
 		'*', '(', ')', '{', '}', '+', '=', '|', '[', ']',
 		',', '.', '/', '<', '>', '?',
 		};
+	private static String RegexKeySeparators = "\\.:;\\/";
 	
 	private static PatternCompiler _compiler = new Perl5Compiler();
+	
+	public static void setRegexKeySeparators(String regexStr) {
+		RegexKeySeparators = regexStr;
+	}
 
 	public static Pattern compileRegexPattern(KeyPattern keyPattern) throws MalformedPatternException {
 		StringBuilder keyPatternRegexExpr = new StringBuilder();
@@ -67,7 +72,7 @@ public class KeySchemaUtil {
 			c = keyPattern.getKeyMatchPattern().charAt(i);
 			
 			if(c == '*') {
-				keyPatternRegexExpr.append("(.+)");
+				keyPatternRegexExpr.append("([^" + RegexKeySeparators + "]+)");
 			} else {
 				isHandled = false;
 				for(k = 0; k < REGEX_META_CHARS.length; k++) {
@@ -179,10 +184,10 @@ public class KeySchemaUtil {
 			try {
 				XmlReader xmlReader = new XmlReader();
 				XmlNode xmlNode = xmlReader.StringToXmlNode(decodedValue, DefaultCharset);
-				logger.info("generateDefaultKeyDesc() Detected xml node:" + xmlNode.getName());
+				logger.info("findoutValueDesc() Detected xml node:" + xmlNode.getName());
 				valDesc.setDataXml(true);
 			} catch(Throwable e) {
-				logger.info("generateDefaultKeyDesc() Not xml:" + decodedValue);
+				logger.info("findoutValueDesc() Not xml:" + decodedValue);
 			}
 		}
 
@@ -324,14 +329,7 @@ public class KeySchemaUtil {
 		DBTable dbTable = parseDBTableOnlyPK(keyPattern, fieldName);
 
 		if(!isDataXml) {
-			dbTable.addCol(
-				new DBCol(
-					DEFAULT_DB_COL_NAME_VALUE, 
-					defaultDBColMaxLength(value.length()),
-					"varchar", "",
-					false
-					)
-			);
+			dbTable.addCol(makeDBColForValue(DEFAULT_DB_COL_NAME_VALUE, value.length()));
 		} else {
 			XmlReader xmlReader = new XmlReader();
 			XmlNode rootNode = xmlReader.StringToXmlNode(value, DefaultCharset);
@@ -358,11 +356,7 @@ public class KeySchemaUtil {
 					
 					//col must not in primary keys
 					if(dbTable.getPrimaryKey(colName) == null) {
-						dbTable.addCol(new DBCol(
-								colName, 
-								defaultDBColMaxLength(colNode.getContent().length()), 
-								"varchar", "", true)
-						);
+						dbTable.addCol(makeDBColForValue(colName, colNode.getContent().length()));
 					}
 					
 					colNode = colNode.getNextNode();
@@ -375,11 +369,7 @@ public class KeySchemaUtil {
 					
 					//col must not in primary keys
 					if(dbTable.getPrimaryKey(colName) == null) {
-						dbTable.addCol(new DBCol(
-								colName, 
-								defaultDBColMaxLength(colNode.getContent().length()), 
-								"varchar", "", true)
-						);
+						dbTable.addCol(makeDBColForValue(colName, colNode.getContent().length()));
 					}
 					
 					colNode = colNode.getNextNode();
@@ -391,8 +381,22 @@ public class KeySchemaUtil {
 		return dbTable;
 	}
 	
+	public static DBCol makeDBColForValue(String colName, int sampleValueLength) {
+		int colMaxLength = defaultDBColMaxLength(sampleValueLength);
+		String colDataType;
+		
+		if(colMaxLength > 16000) {
+			colDataType = "text";
+			colMaxLength = 0;
+		} else {
+			colDataType = "varchar";
+		}
+		
+		return new DBCol(colName, colMaxLength, colDataType, "", true);
+	}
+	
 	public static int defaultDBColMaxLength(int lengthOfSampleColValue) {
-		if(lengthOfSampleColValue == 0) {
+		if(lengthOfSampleColValue < 32) {
 			return 32;
 		} else if(lengthOfSampleColValue < 128) {
 			return lengthOfSampleColValue * 2;
@@ -485,6 +489,10 @@ public class KeySchemaUtil {
 				sb.append('_');
 			}
 			sb.append(fieldName);
+		}
+		
+		if(sb.charAt(sb.length() - 1) == '_') {
+			sb.deleteCharAt(sb.length() - 1);
 		}
 		
 		return sb.toString().toLowerCase();

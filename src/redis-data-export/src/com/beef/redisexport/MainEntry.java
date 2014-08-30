@@ -160,6 +160,20 @@ public class MainEntry {
 		System.out.println("  scanCount:" + scanCount);
 		System.out.println("--------------------------------------------");
 
+		startIterateData(redisDataExportContext, 
+				keyPattern, schemaPath, keyPatternArray, 
+				threadCount, scanCount, redisDataHandlerName);
+	}
+	
+	public static void startIterateData(
+			RedisDataExportContext redisDataExportContext,
+			String keyPattern,
+			String schemaPath,
+			String keyPatternArray,
+			int threadCount,
+			int scanCount,
+			String redisDataHandlerName
+			) throws XmlParseException, IOException, InvocationTargetException, IllegalAccessException, InstantiationException, NoSuchMethodException {
 		//Default ClassFinder ----------------------
 		PreScanClassFinder defaultClassFinder = new PreScanClassFinder();
 		defaultClassFinder.loadClassOfPackage(DefaultRedisDataExportHandler.class.getPackage().getName());		
@@ -177,6 +191,7 @@ public class MainEntry {
 		} else if (keyPatternArray != null) {
 			//auto generate keySchema
 		}
+		
 		
 		//Data Handler -----------------------------
 		IRedisDataHandler redisDataHandler;

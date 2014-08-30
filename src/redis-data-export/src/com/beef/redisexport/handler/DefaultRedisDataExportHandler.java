@@ -171,7 +171,7 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 	
 	@Override
 	public void handleRedisKey(String key, String keyType) {
-		logger.debug("handleRedisKey()" + " key:" + key + " keyType:" + keyType);
+		//logger.debug("handleRedisKey()" + " key:" + key + " keyType:" + keyType);
 		
 		if(keyType.equals("string")) {
 			String value = null;
@@ -188,7 +188,7 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 				_jedisPool.returnResource(jedis);
 			}
 			
-			handleRedisKey(key, null, value);
+			handleRedisKeyOneValue(key, null, value);
 		} else if(keyType.equals("list")) {
 			Jedis jedis = null;
 			long len = 0;
@@ -217,7 +217,7 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 					_jedisPool.returnResource(jedis);
 				}
 				
-				handleRedisKey(key, null, value);
+				handleRedisKeyOneValue(key, null, value);
 			}
 			
 		} else if(keyType.equals("hash")) {
@@ -245,7 +245,7 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 					
 					value = jedis.hget(key, fieldName);
 					
-					handleRedisKey(keyType, fieldName, value);
+					handleRedisKeyOneValue(key, fieldName, value);
 				} catch(JedisConnectionException e) {
 					_jedisPool.returnBrokenResource(jedis);
 					throw e;
@@ -262,7 +262,8 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 		}
 	}
 	
-	protected void handleRedisKey(String key, String fieldName, String value) {
+	protected void handleRedisKeyOneValue(String key, String fieldName, String value) {
+		logger.debug("handleRedisKeyOneValue() key:" + key + " fieldName:" + fieldName + " value:" + value);
 		try {
 			if(value == null || value.length() == 0) {
 				logger.debug("handleRedisKey() value is null. key:" + key + " fieldName:" + fieldName);
@@ -283,11 +284,12 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 			}
 			
 			if(variateKeyValueList == null) {
-				logger.warn("handleRedisKey() Not found keyPattern for key:" + key);
+				logger.warn("handleRedisKeyOneValue() Not found keyPattern for key:" + key);
 				return;
 			}
 			
-			logger.debug("handleRedisKey()" 
+			logger.debug("handleRedisKeyOneValue()" 
+					+ " key:" + key
 					+ " keyPattern:" + keyPattern.getKeyPattern() 
 					+ " keyMatchPattern:" + keyPattern.getKeyMatchPattern());
 			
@@ -296,27 +298,25 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 			
 			//decode value if compressed
 			String decodedValue = null;
-			if (keyDesc.getValDesc().getCompressMode() == null) {
+			if(ValueDesc.COMPRESS_MODE_LZF.equalsIgnoreCase(keyDesc.getValDesc().getCompressMode())) {
+				//lzf
+				decodedValue = new String(
+						RedisDataUtil.decodeStringBytes(value.getBytes(KeySchemaUtil.DefaultCharset), CompressAlgorithm.LZF),
+						KeySchemaUtil.DefaultCharset);
+			} else if(ValueDesc.COMPRESS_MODE_GZIP.equalsIgnoreCase(keyDesc.getValDesc().getCompressMode())) {
+				//gzip
+				decodedValue = new String(
+						RedisDataUtil.decodeStringBytes(value.getBytes(KeySchemaUtil.DefaultCharset), CompressAlgorithm.GZIP),
+						KeySchemaUtil.DefaultCharset);
+			} else {
 				//not compressed
 				decodedValue = value;
-			} else {
-				if(keyDesc.getValDesc().getCompressMode().equals(ValueDesc.COMPRESS_MODE_LZF)) {
-					//lzf
-					decodedValue = new String(
-							RedisDataUtil.decodeStringBytes(value.getBytes(KeySchemaUtil.DefaultCharset), CompressAlgorithm.LZF),
-							KeySchemaUtil.DefaultCharset);
-				} else if(keyDesc.getValDesc().getCompressMode().equals(ValueDesc.COMPRESS_MODE_GZIP)) {
-					//gzip
-					decodedValue = new String(
-							RedisDataUtil.decodeStringBytes(value.getBytes(KeySchemaUtil.DefaultCharset), CompressAlgorithm.GZIP),
-							KeySchemaUtil.DefaultCharset);
-				}
 			}
 			
 			//check DB table
 			DBTable dbTable = findDBTable(keyDesc, keyPattern, fieldName, decodedValue);
 			if(dbTable == null) {
-				logger.warn("handleRedisKey() Not enough information to create DB table." 
+				logger.warn("handleRedisKeyOneValue() Not enough information to create DB table." 
 						+ " keyPattern:" + keyPattern.getKeyPattern() 
 						+ " key:" + key + " fieldName:" + fieldName + " decodedValue:" + decodedValue);
 				return;
@@ -325,8 +325,9 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 			//insert or update into table
 			int updCnt = insertValueIntoDBTable(
 					dbTable, keyPattern, variateKeyValueList, 
-					keyDesc.getValDesc(), decodedValue);
-			logger.info("handleRedisKey() updCnt:" + updCnt);
+					keyDesc.getValDesc(), decodedValue,
+					key);
+			logger.info("handleRedisKeyOneValue() updCnt:" + updCnt);
 		} catch(Throwable e) {
 			logger.error(null, e);
 		}
@@ -387,7 +388,8 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 	protected int insertValueIntoDBTable(
 			DBTable dbTable, 
 			KeyPattern keyPattern, List<String> variateKeyValueList,
-			ValueDesc valDesc, String value 
+			ValueDesc valDesc, String value, 
+			String key
 			) throws SQLException {
 		int updCnt = 0;
 		
@@ -448,7 +450,7 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 								
 								//check col
 								DBCol dbCol = checkColumnExists(conn, dbTable, colName, colVal);
-								checkColumnMaxLength(conn, dbTable, dbCol, colVal);
+								checkColumnMaxLength(conn, dbTable, dbCol, colVal, key);
 							}
 							
 							//insert or update
@@ -492,7 +494,7 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 						
 						//check col
 						DBCol dbCol = checkColumnExists(conn, dbTable, colName, colVal);
-						checkColumnMaxLength(conn, dbTable, dbCol, colVal);
+						checkColumnMaxLength(conn, dbTable, dbCol, colVal, key);
 					}
 					
 					//insert or update
@@ -505,6 +507,10 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 			} else {
 				List<String> otherColValueList = new ArrayList<String>();
 				otherColValueList.add(value);
+				
+				//check col
+				DBCol dbCol = checkColumnExists(conn, dbTable, KeySchemaUtil.DEFAULT_DB_COL_NAME_VALUE, value);
+				checkColumnMaxLength(conn, dbTable, dbCol, value, key);
 				
 				//insert or update
 				updCnt += DBTableUtil.insertOrUpdate(conn, 
@@ -550,10 +556,7 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 				logger.info("checkColumnExists() Column not exists." 
 						+ " table:" + dbTable.getTableName() + ", colName:" + colName);
 				
-				dbCol = new DBCol(
-						colName, 
-						KeySchemaUtil.defaultDBColMaxLength(colValue.length()), 
-						"varchar", "", true);
+				dbCol = KeySchemaUtil.makeDBColForValue(colName, colValue.length());
 				DBTableUtil.alterTableAddColumn(conn, dbTable.getTableName(), dbCol);
 
 				dbTable.addCol(dbCol);
@@ -566,7 +569,8 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 		return dbCol;
 	}
 	
-	private void checkColumnMaxLength(Connection conn, DBTable dbTable, DBCol dbCol, String colValue) throws SQLException {
+	private void checkColumnMaxLength(Connection conn, 
+			DBTable dbTable, DBCol dbCol, String colValue, String key) throws SQLException {
 		int valLen = colValue.length();
 		if(valLen > dbCol.getColMaxLength()) {
 			
@@ -578,15 +582,18 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 				if(valLen > dbCol.getColMaxLength()) {
 					//change column length
 					int newMaxLen = KeySchemaUtil.defaultDBColMaxLength(valLen);
-					logger.info("checkColumnMaxLength() Column max length is going to be changed to " + newMaxLen + "." 
+					logger.info("checkColumnMaxLength() Column max length is going to be changed. key:" 
+							+ key + " newMaxLen:" + newMaxLen + "." 
 							+ " table:" + dbTable.getTableName() + ", colName:" + dbCol.getColName());
 					
-					DBCol newDBCol = new DBCol(dbCol.getColName(), newMaxLen, dbCol.getDataType(), dbCol.getExtra(), dbCol.isNullable());
+					DBCol newDBCol = new DBCol(dbCol.getColName(), newMaxLen, dbCol.getDataType(), 
+							dbCol.getExtra(), dbCol.isNullable());
 					DBTableUtil.alterTableChangeColumn(conn, dbTable.getTableName(), newDBCol);
 
 					dbCol.setColMaxLength(newMaxLen);
 
-					logger.info("checkColumnMaxLength() Column max length is changed to " + newMaxLen); 
+					logger.info("checkColumnMaxLength() Column max length is changed. key:" 
+							+ key + " newMaxLen:" + newMaxLen); 
 				}
 			} finally {
 				lockForChangeDBCol.writeLock().unlock();

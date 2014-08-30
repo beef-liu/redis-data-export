@@ -42,7 +42,7 @@ public class MKeySchema {
 	}
 
 	private static String getMapKey(String keyPattern, String fieldName) {
-		if(fieldName == null || fieldName.length() > 0) {
+		if(fieldName == null || fieldName.length() == 0) {
 			return keyPattern;
 		} else {
 			return fieldName.concat(".").concat(fieldName);

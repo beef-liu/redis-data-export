@@ -4,6 +4,6 @@
   <maxIdle>5</maxIdle>
   <maxWait>30000</maxWait>
   <url>jdbc:mysql://127.0.0.1/test</url>
-  <userName>test</userName>
-  <password>test</password>
+  <userName>test1</userName>
+  <password>test1</password>
 </DBConfig>
