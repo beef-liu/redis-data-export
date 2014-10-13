@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -18,8 +17,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.apache.log4j.Logger;
 import org.apache.oro.text.regex.MalformedPatternException;
 import org.apache.oro.text.regex.Pattern;
-import org.apache.oro.text.regex.PatternCompiler;
-import org.apache.oro.text.regex.Perl5Compiler;
 import org.w3c.tools.codec.Base64FormatException;
 
 import redis.clients.jedis.Jedis;
@@ -28,7 +25,6 @@ import redis.clients.jedis.exceptions.JedisConnectionException;
 import MetoXML.XmlReader;
 import MetoXML.Base.XmlNode;
 import MetoXML.Base.XmlParseException;
-import MetoXML.Util.ClassFinder;
 
 import com.beef.redisexport.interfaces.IRedisDataHandler;
 import com.beef.redisexport.schema.data.KeyDesc;
@@ -40,7 +36,7 @@ import com.beef.redisexport.schema.util.DBTableUtil;
 import com.beef.redisexport.schema.util.KeyPattern;
 import com.beef.redisexport.schema.util.KeySchemaUtil;
 import com.beef.redisexport.schema.util.MKeySchema;
-import com.beef.redisexport.util.DBPool;
+import com.beef.redisexport.util.IDBPool;
 import com.beef.util.redis.RedisDataUtil;
 import com.beef.util.redis.RedisDataUtil.CompressAlgorithm;
 import com.beef.util.redis.compress.CompressException;
@@ -49,7 +45,7 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 	private final static Logger logger = Logger.getLogger(DefaultRedisDataExportHandler.class);
 	
 	private JedisPool _jedisPool;
-	private DBPool _dbPool;
+	private IDBPool _dbPool;
 	
 	/**
 	 * key:table name value:DBTable
@@ -61,7 +57,7 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 	private List<Pattern> _keyRegexPatternList = new ArrayList<Pattern>();
 
 	@Override
-	public void initWithKeySchema(JedisPool jedisPool, DBPool dbPool,
+	public void initWithKeySchema(JedisPool jedisPool, IDBPool dbPool,
 			KeySchema keySchema) {
 		_jedisPool = jedisPool;
 		_dbPool = dbPool;
@@ -84,7 +80,7 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 	}
 	
 	@Override
-	public void initWithKeyPatternArray(JedisPool jedisPool, DBPool dbPool,
+	public void initWithKeyPatternArray(JedisPool jedisPool, IDBPool dbPool,
 			String[] keyPatternArray) {
 		_jedisPool = jedisPool;
 		_dbPool = dbPool;

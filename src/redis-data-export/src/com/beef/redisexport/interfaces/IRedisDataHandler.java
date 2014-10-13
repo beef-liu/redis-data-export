@@ -3,15 +3,15 @@ package com.beef.redisexport.interfaces;
 import redis.clients.jedis.JedisPool;
 
 import com.beef.redisexport.schema.data.KeySchema;
-import com.beef.redisexport.util.DBPool;
+import com.beef.redisexport.util.IDBPool;
 
 
 public interface IRedisDataHandler {
 
 	
-	public void initWithKeySchema(JedisPool jedisPool, DBPool dbPool, KeySchema keySchema);
+	public void initWithKeySchema(JedisPool jedisPool, IDBPool dbPool, KeySchema keySchema);
 	
-	public void initWithKeyPatternArray(JedisPool jedisPool, DBPool dbPool, String[] keyPatternArray);
+	public void initWithKeyPatternArray(JedisPool jedisPool, IDBPool dbPool, String[] keyPatternArray);
 	
 	/**
 	 * Notice: handleRedisData() will be invoked by multiple threads concurrently.

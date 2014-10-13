@@ -9,13 +9,14 @@ import org.apache.commons.dbcp.BasicDataSource;
 
 import com.beef.redisexport.config.DBConfig;
 
-public class DBPool {
+public class DBPool implements IDBPool {
 	private DataSource _dataSource = null;
 	
 	public DBPool(DBConfig config) {
 		createDataSource(config);
 	}
 	
+	@Override
 	public Connection getConnection() throws SQLException {
 		return _dataSource.getConnection();
 	}

@@ -23,7 +23,7 @@ public class RedisDataExportContext {
 	public static final String FILE_NAME_DB_CONFIG = "DBConfig.xml";
 	public static final String FILE_NAME_REDIS_CONFIG = "RedisConfig.xml";
 	
-	private static RedisDataExportContext _singleton = null;
+	//private static RedisDataExportContext _singleton = null;
 	
 	private File _workDir;
 	private DBPool _dbPool;
