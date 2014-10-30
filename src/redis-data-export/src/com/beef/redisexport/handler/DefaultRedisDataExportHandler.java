@@ -280,14 +280,14 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 			}
 			
 			if(variateKeyValueList == null) {
-				logger.warn("handleRedisKeyOneValue() Not found keyPattern for key:" + key);
+				logger.debug("handleRedisKeyOneValue() Not found keyPattern for key:" + key);
 				return;
 			}
 			
-			logger.debug("handleRedisKeyOneValue()" 
-					+ " key:" + key
-					+ " keyPattern:" + keyPattern.getKeyPattern() 
-					+ " keyMatchPattern:" + keyPattern.getKeyMatchPattern());
+//			logger.info("handleRedisKeyOneValue()" 
+//					+ " key:" + key
+//					+ " keyPattern:" + keyPattern.getKeyPattern() 
+//					+ " keyMatchPattern:" + keyPattern.getKeyMatchPattern());
 			
 			//find keyDesc
 			KeyDesc keyDesc = findKeyDesc(keyPattern, key, fieldName, value);
@@ -323,9 +323,23 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 					dbTable, keyPattern, variateKeyValueList, 
 					keyDesc.getValDesc(), decodedValue,
 					key);
-			logger.info("handleRedisKeyOneValue() updCnt:" + updCnt);
+			if(updCnt == 0) {
+				logger.info("handleRedisKeyOneValue() updCnt:" + updCnt 
+						+ " table:" + dbTable.getTableName()
+						+ " keyPattern:" + keyPattern.getKeyPattern()
+						+ " key:" + key
+						+ " fieldName:" + fieldName + " decodedValue:" + decodedValue
+						);
+			} else {
+				logger.info("handleRedisKeyOneValue() updCnt:" + updCnt 
+						+ " table:" + dbTable.getTableName()
+						+ " keyPattern:" + keyPattern.getKeyPattern()
+						+ " key:" + key
+						);
+			}
+			
 		} catch(Throwable e) {
-			logger.error(null, e);
+			logger.error("handleRedisKeyOneValue() key:" + key + " fieldName:" + fieldName, e);
 		}
 	}
 
@@ -454,6 +468,12 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 									dbTable.getTableName(), 
 									dbTable.getPrimaryKeys(), primarykeyValueList, 
 									dbTable.getCols(), otherColValueList);
+							
+							didInsertOrUpdate(conn, 
+									dbTable.getTableName(), 
+									dbTable.getPrimaryKeys(), primarykeyValueList, 
+									dbTable.getCols(), otherColValueList);
+							
 						} catch(Throwable e) {
 							logger.error(null, e);
 						}
@@ -499,6 +519,10 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 							dbTable.getPrimaryKeys(), primarykeyValueList, 
 							dbTable.getCols(), otherColValueList);
 					
+					didInsertOrUpdate(conn, 
+							dbTable.getTableName(), 
+							dbTable.getPrimaryKeys(), primarykeyValueList, 
+							dbTable.getCols(), otherColValueList);
 				}
 			} else {
 				List<String> otherColValueList = new ArrayList<String>();
@@ -510,6 +534,11 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 				
 				//insert or update
 				updCnt += DBTableUtil.insertOrUpdate(conn, 
+						dbTable.getTableName(), 
+						dbTable.getPrimaryKeys(), primarykeyValueList, 
+						dbTable.getCols(), otherColValueList);
+
+				didInsertOrUpdate(conn, 
 						dbTable.getTableName(), 
 						dbTable.getPrimaryKeys(), primarykeyValueList, 
 						dbTable.getCols(), otherColValueList);
@@ -529,6 +558,16 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 			} catch(Throwable e) {
 			}
 		}
+		
+	}
+	
+	/**
+	 * An extending point for subclass
+	 */
+	protected void didInsertOrUpdate(Connection conn,
+			String tableName,
+			List<DBCol> primaryKeyList, List<String> primarykeyValueList,
+			List<DBCol> otherColList, List<String> otherColValueList) {
 		
 	}
 	
@@ -567,6 +606,10 @@ public class DefaultRedisDataExportHandler implements IRedisDataHandler {
 	
 	private void checkColumnMaxLength(Connection conn, 
 			DBTable dbTable, DBCol dbCol, String colValue, String key) throws SQLException {
+		if(colValue == null) {
+			return;
+		}
+		
 		int valLen = colValue.length();
 		if(valLen > dbCol.getColMaxLength()) {
 			
